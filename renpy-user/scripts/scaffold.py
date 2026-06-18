@@ -29,7 +29,7 @@ import shutil
 import sys as _sys
 
 # 版本边界守卫
-_guard_path = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../scripts'))
+_guard_path = os.path.dirname(os.path.abspath(__file__))
 if _guard_path not in _sys.path:
     _sys.path.insert(0, _guard_path)
 try:

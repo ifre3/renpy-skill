@@ -24,9 +24,15 @@ class Export:
     """Ren'Py .rpy ↔ JSON 双向转换。"""
 
     # 需要提取的 Ren'Py 语句类型
+    # (?:[^"\\]|\\.)* 可匹配含转义引号 \" 的文本
     LINE_PATTERNS = {
-        "say": re.compile(r'^\s*(?P<who>\w+)?\s*"(?P<what>[^"]*)"\s*$'),
-        "narrator": re.compile(r'^\s*"(?P<what>[^"]*)"\s*$'),
+        "say": re.compile(
+            r'^\s*(?P<who>\w+)?\s*"'
+            r'(?P<what>(?:[^"\\]|\\.)*)"\s*$'
+        ),
+        "narrator": re.compile(
+            r'^\s*"(?P<what>(?:[^"\\]|\\.)*)"\s*$'
+        ),
         "comment": re.compile(r'^\s*#\s*(?P<text>.*)$'),
     }
 
@@ -66,30 +72,84 @@ class Export:
 
         return data
 
+    def _join_continuation(self, lines: list, start: int) -> tuple:
+        """
+        将多行对话的续行合并为单行。
+        Ren'Py 中续行以空白开头（非 python/menu/screen 块内）。
+        返回 (joined_line, next_index)。
+        """
+        joined = [lines[start]]
+        i = start + 1
+        while i < len(lines):
+            nxt = lines[i]
+            if nxt and (nxt[0] in (' ', '\t')):
+                # 空行或纯空白行结束续行
+                if not nxt.strip():
+                    break
+                joined.append(nxt)
+                i += 1
+            else:
+                # 检查是否是纯对话续行（不以关键字开头）
+                s = nxt.strip()
+                if s and not s[0].isalpha():
+                    joined.append(nxt)
+                    i += 1
+                else:
+                    break
+        return '\n'.join(joined), i
+
+    def _is_python_block(self, line: str) -> bool:
+        """检测 python / init python 块开头（需要跳过内部内容）。"""
+        s = line.strip()
+        return s in ("python:", "python hide:") or s.startswith("init python")
+
     def _parse_file(self, content: str, include_all: bool = False) -> list:
         """解析一个 .rpy 文件内容为结构化条目。"""
         entries = []
         lines = content.split("\n")
-        in_python_block = False
+        in_python = False
+        python_depth = 0
 
-        for i, line in enumerate(lines, 1):
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            lineno = i + 1
             stripped = line.strip()
 
             # 跳过空行
             if not stripped:
+                i += 1
                 continue
 
-            # 跳过 python 块内内容
-            if stripped.startswith("python") and stripped.endswith(":"):
-                in_python_block = True
+            # 跳过 python 块内的代码（含 init python）
+            if self._is_python_block(stripped):
+                in_python = True
+                python_depth = len(line) - len(line.lstrip())
+                i += 1
                 continue
-            if in_python_block:
-                if stripped and not stripped.startswith((" ", "\t")):
-                    in_python_block = False
+            if in_python:
+                cur_depth = len(line) - len(line.lstrip()) if stripped else 0
+                if cur_depth <= python_depth and stripped:
+                    in_python = False
                 else:
+                    i += 1
                     continue
 
-            entry = {"line": i, "raw": stripped}
+            # 尝试合并多行对话
+            joined_line = line
+            joined_lineno = lineno
+            # 检测：有开头引号但没有闭合引号（排除已转义的引号）
+            unescaped_quotes = [m.start() for m in re.finditer(r'(?<!\\)"', stripped)]
+            if len(unescaped_quotes) % 2 == 1 and len(unescaped_quotes) > 0:
+                joined_line, next_i = self._join_continuation(lines, i)
+                joined_lineno = lineno
+                # 用合并后的行重新匹配（去掉换行符）
+                stripped = joined_line.replace('\n', ' ').strip()
+                i = next_i
+            else:
+                i += 1
+
+            entry = {"line": joined_lineno, "raw": stripped}
 
             # 注释
             cm = self.LINE_PATTERNS["comment"].match(stripped)

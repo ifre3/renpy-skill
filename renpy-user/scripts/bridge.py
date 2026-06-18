@@ -30,7 +30,7 @@ import textwrap
 
 # 版本边界守卫 — 导入时自动检查 SDK 版本兼容性
 import sys as _sys
-_guard_path = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../scripts'))
+_guard_path = os.path.dirname(os.path.abspath(__file__))
 if _guard_path not in _sys.path:
     _sys.path.insert(0, _guard_path)
 try:

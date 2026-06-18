@@ -16,9 +16,9 @@
 
 3. **向上查找** — 从脚本所在目录向上遍历，寻找含 `renpy.py` 的目录
 
-4. **常见路径 fallback** — `D:\workplace\renpy-8.5.3-sdk`
+4. **常见路径 fallback** — `~/renpy-sdk`（用户主目录下）
 
-检测失败时抛出 `RenPyCLIError` 并给出配置提示。
+检测失败时抛出 `RuntimeError` 并给出配置提示。
 
 ---
 

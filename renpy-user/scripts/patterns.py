@@ -19,9 +19,7 @@ import os
 import sys
 import textwrap
 
-_script_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _script_dir)  # for bridge import
-sys.path.insert(0, os.path.normpath(os.path.join(_script_dir, '../../scripts')))  # for shared _version_guard
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bridge import RenPyScript
 
 # 版本边界守卫

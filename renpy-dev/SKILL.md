@@ -62,6 +62,7 @@ for issue in diagnose_from_file("game/log.txt"):
 | 错误诊断 | diagnose.py 只能识别已知错误模式，复杂逻辑 bug 不会捕获 |
 | 测试清理 | `inject_test()` 后调用 `remove_injected()` 清理测试文件 |
 | 游戏内容 | 需要写剧情/设画面/加系统？→ 加载 **renpy-user** Skill |
+| 导出限制 | export.py 忽略 python 块、menu/screen 定义内的文本；同一条对话以最后一行行号标记 |
 
 ## 进阶参考
 
