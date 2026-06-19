@@ -33,7 +33,7 @@ from cli import RenPyCLI
 cli = RenPyCLI()
 
 cli.run("项目路径")          # 启动游戏
-cli.quit_cmd("项目路径")     # 立即退出
+cli.quit("项目路径")         # 立即退出
 cli.director("项目路径")     # Interactive Director
 cli.rmpersistent("项目路径") # 清除存档（⚠️ 不可恢复）
 ```
@@ -61,7 +61,7 @@ cli.android_build("项目路径")    # Android（耗时）
 cli.ios_create("项目路径")       # iOS Xcode 项目
 cli.web_build("项目路径")        # Web (HTML5)
 
-cli.update_old_game("项目路径")  # 迁移旧版项目
+cli.update("项目路径")           # 迁移旧版项目
 ```
 
 ### 多语言
@@ -69,7 +69,7 @@ cli.update_old_game("项目路径")  # 迁移旧版项目
 ```python
 cli.translate("项目路径", "chinese")               # 生成翻译模板
 cli.dialogue("项目路径", "chinese")                # 导出对话
-cli.dialogue("项目路径", "chinese", strings=True)  # 导出字符串
+cli.extract_strings("项目路径", output="out.txt")  # 导出字符串
 cli.extract_strings("项目路径", output="out.txt")
 cli.merge_strings("项目路径", "chinese")           # 合并回项目
 ```
@@ -80,25 +80,6 @@ cli.merge_strings("项目路径", "chinese")           # 合并回项目
 cli.generate_gui("项目路径")     # ⚠️ 覆盖现有 GUI 文件
 cli.gui_images("项目路径")       # 生成 GUI 图片
 cli.set_project("项目路径", "我的故事")
-cli.version()                   # 显示 Ren'Py 版本号
-cli.json_dump("项目路径", "info.json")
-cli.help()                      # 全局帮助
-cli.help("项目路径", "lint")    # 命令详情
-```
-
----
-
-## 模块级便捷函数
-
-也可不创建实例，直接调用模块级函数：
-
-```python
-from cli import lint, compile, distribute, run, translate, test, version
-
-lint("项目路径", error_code=True)
-run("项目路径")
-distribute("项目路径", "D:/output")
-version()
 ```
 
 ---
@@ -110,7 +91,7 @@ python cli.py lint "D:/my_game" --error-code
 python cli.py run "D:/my_game"
 python cli.py distribute "D:/my_game" --destination "D:/output"
 python cli.py translate "D:/my_game" --language chinese
-python cli.py version
+
 ```
 
 ---

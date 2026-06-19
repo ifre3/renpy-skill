@@ -3,10 +3,10 @@ Ren'Py 错误诊断 — 解析 Ren'Py 错误/警告日志并推荐修复方案
 
 用法：
     diagnose("D:/projects/my_game/game/log.txt")
-    diagnose_from_text("""  # 从文本
-I'm sorry, but an uncaught exception occurred.
+    diagnose_from_text('''  # 从文本
+I''m sorry, but an uncaught exception occurred.
 ...
-""")
+''')
 
     # 检测项目常见问题
     check_project("D:/projects/my_game")

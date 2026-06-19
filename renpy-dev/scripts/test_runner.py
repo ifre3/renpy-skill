@@ -205,17 +205,17 @@ def make_scene_test(scenes: list) -> str:
 
 def make_menu_test(label: str, choices: list) -> str:
     """
-    生成菜单选择测试。
+    生成菜单选择测试 — 每个选项生成一个独立 testcase。
     choices = [("选项文本", "expected_label"), ...]
     """
     lines = ["# 菜单选择测试 - 自动生成"]
-    lines.append(f"testcase test_menu_{label}:")
-    lines.append(f"    call {label}")
-    for text, expected in choices:
+    for i, (text, expected) in enumerate(choices):
+        lines.append(f"testcase test_menu_{label}_{i}:")
+        lines.append(f"    call {label}")
         lines.append(f'    click "{text}"')
         if expected:
-            lines.append(f"    assert renpy.get_all_labels().get(\"{expected}\")")
-    lines.append("")
+            lines.append(f'    assert "{expected}" in renpy.get_all_labels()')
+        lines.append("")
     return "\n".join(lines)
 
 

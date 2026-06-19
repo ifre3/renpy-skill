@@ -1,1 +1,0 @@
-# renpy-user scripts package

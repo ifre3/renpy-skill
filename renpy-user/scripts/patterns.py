@@ -160,7 +160,21 @@ def _pattern_cjk_font(params: dict) -> RenPyScript:
       fallback: 后备字体
     """
     font = params.get("font", "SourceHanSansSC-Regular.otf")
-    bold = params.get("bold", font.replace(".", "Bold.") if "Bold" not in font else None)
+    # 推断粗体文件名：将权重替换为 Bold
+    if "Bold" in font:
+        bold_default = None
+    else:
+        import re
+        base, ext = font.rsplit(".", 1)
+        # 替换常见权重标记：-Regular / -Medium / -Light → -Bold
+        base_bold = re.sub(r"-(Regular|Medium|Light|Thin|ExtraLight|SemiBold)$", "-Bold", base)
+        if base_bold == base and "-" in base:
+            # 无匹配时在最后一段前插入 -Bold
+            base_bold = f"{base}-Bold"
+        elif base_bold == base:
+            base_bold = f"{base}Bold"
+        bold_default = f"{base_bold}.{ext}"
+    bold = params.get("bold", bold_default)
     size = params.get("size", 22)
 
     script = RenPyScript()
@@ -258,7 +272,7 @@ def _pattern_save_load(params: dict) -> RenPyScript:
     script._raw(f"define config.save_slots = {slots + auto}")
     script._raw(f"define config.has_autosave = True")
     script._raw(f"define config.autosave_slots = {auto}")
-    script._raw(f"define config.auto_save_delay = ' Preference'")
+    script._raw(f"define config.auto_save_delay = {params.get('auto_delay', 300)}")
     script._raw(f"define config.auto_save_on_choice = True")
     script._raw(f"define config.auto_save_on_quit = True")
     script.blank()

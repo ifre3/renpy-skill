@@ -97,20 +97,16 @@ class Analyzer:
 
     def _find_orphan_refs(self):
         """查找悬空引用（call/jump 到不存在的 label）。"""
+        BUILTIN_LABELS = {"start", "after_load", "splashscreen", "main_menu", "quit"}
         defined_labels = {name for name, _, _ in self.results["labels"]}
         for name, frel, pos in self.results["calls"] + self.results["jumps"]:
-            # 只检查本项目的 label（排除 renpy 内置如 start）
-            is_internal = True
-            for dl in defined_labels:
-                if name == dl or name.startswith(dl + "."):
-                    is_internal = False
-                    break
-            if is_internal:
-                # 再查一次——可能 label 确实不存在
-                if name not in defined_labels:
-                    # 跳过常见内置 label
-                    if name not in ("start", "after_load", "splashscreen"):
-                        self.results["orphan_refs"].append((name, frel, pos))
+            # 跳过已知内置 label
+            if name in BUILTIN_LABELS:
+                continue
+            # 检查是否匹配已定义的 label（精确匹配 或 子 label 如 mylabel.sub）
+            defined = any(name == dl or name.startswith(dl + ".") for dl in defined_labels)
+            if not defined:
+                self.results["orphan_refs"].append((name, frel, pos))
 
     def summary(self) -> dict:
         """返回统计摘要。"""

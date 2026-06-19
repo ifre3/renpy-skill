@@ -48,21 +48,13 @@ class RenPyScript:
     def __init__(self):
         self._lines = []        # list of (indent_level, code, is_python)
         self._indent = 0
-        self._pending_indent = 0  # indent after next label/block
 
     # ── 基础操作 ──────────────────────────────────────────
 
     def _add(self, code: str, is_python: bool = False):
-        lines = code.split("\n")
-        for i, line in enumerate(lines):
-            if i == 0:
-                ind = self._indent
-            else:
-                ind = self._pending_indent if self._pending_indent > 0 else self._indent
-            self._lines.append((ind, line, is_python))
-        # reset pending indent after consumption
-        if self._pending_indent > 0 and not is_python:
-            pass  # keep pending for next line
+        """添加多行代码，每行使用当前缩进级别。"""
+        for line in code.split("\n"):
+            self._lines.append((self._indent, line, is_python))
 
     def _raw(self, code: str):
         """Add raw .rpy line (no indent, no prefix)."""
@@ -99,7 +91,9 @@ class RenPyScript:
         return self
 
     def label(self, name: str):
-        """label <name>:"""
+        """label <name>: — 自动关闭前一个 label 的缩进。"""
+        # 将缩进重置到顶层（关闭前一个 label/block）
+        self._indent = 0
         self._raw(f"label {name}:")
         self._block()
         return self
@@ -170,11 +164,13 @@ class RenPyScript:
     def say(self, who: str | None, what: str):
         """<who> "<what>"  或  "<what>" (narration)
         who = None → narration (用 narrator)
+        自动转义对话中的双引号。
         """
+        escaped = what.replace('\\', '\\\\').replace('"', '\\"')
         if who is None or who == "":
-            self._raw(f'"{what}"')
+            self._raw(f'"{escaped}"')
         else:
-            self._raw(f'{who} "{what}"')
+            self._raw(f'{who} "{escaped}"')
         return self
 
     def narrator(self, text: str):
@@ -182,9 +178,12 @@ class RenPyScript:
         self._raw(f'"{text}"')
         return self
 
-    def show(self, name: str, at: str = "", onlayer: str = "", as_: str = "", zorder: int = None, behind: list = None, atl: str = ""):
-        """show <name> [at <transforms>] [onlayer <layer>] [as <tag>] [zorder <n>] [behind <tags>]"""
-        parts = ["show", name]
+    def show(self, name: str, at: str = "", onlayer: str = "", as_: str = "", zorder: int = None, behind: list = None, atl: str = "", what: str = "", with_: str = ""):
+        """show <name> [expression <what>] [at <transforms>] [onlayer <layer>] [as <tag>] [zorder <n>] [behind <tags>] [with <trans>]"""
+        if what:
+            parts = ["show", "expression", what, "as", name]
+        else:
+            parts = ["show", name]
         if at:
             parts.extend(["at", at])
         if onlayer:
@@ -198,6 +197,8 @@ class RenPyScript:
         if atl:
             parts.extend(["at", atl])
         self._raw(" ".join(parts))
+        if with_:
+            self._raw(f"with {with_}")
         return self
 
     def scene(self, name: str = "", with_: str = ""):
@@ -474,7 +475,7 @@ grid {cols} {rows}:
         if idx < len({name}_unlocked):
             imagebutton:
                 idle {name}_unlocked[idx]
-                action ShowMenu(...)
+                action ShowMenu("view_{name}")  # TODO: 替换为目标屏幕名
         else:
             null
 textbutton "上一页" xalign 0.3 yalign 0.95 action SetVariable("{name}_page", max(0, {name}_page - 1))
