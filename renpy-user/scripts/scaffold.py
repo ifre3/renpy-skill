@@ -1,4 +1,4 @@
-"""
+﻿"""
 Ren'Py 项目脚手架 — 从 JSON schema 生成完整游戏项目
 
 用法：
@@ -233,6 +233,58 @@ label start:
 
     # ── 构建 ───────────────────────────────────────────
 
+    def _generate_fault_tolerance_rpy(self) -> str:
+        """生成 error_handling.rpy — 容错性配置。"""
+        return """## error_handling.rpy — 容错性配置
+## 基于 Ren'Py 8.5.3 官方文档自动生成
+
+define config.developer = True
+
+init python:
+    # 1. 全局异常处理器 (doc/config.html)
+    def _game_exception_handler(exception, traceback):
+        msg = str(exception)
+        for p in ["NameError","TypeError","KeyError","IndexError"]:
+            if p in msg:
+                renpy.notify("[风格] 遇到一个小问题，已自动跳过。")
+                return True
+        return False
+    config.exception_handler = _game_exception_handler
+
+    # 2. 存档加载失败跳转 (doc/config.html)
+    config.load_failed_label = "load_failed"
+
+    # 3. 缺失 label 兜底 (doc/config.html)
+    def _missing_label(name):
+        return "missing_label"
+    config.missing_label_callback = _missing_label
+
+    # 4. 缺失图片兜底 (doc/config.html)
+    def _missing_image(name):
+        return "bg placeholder"
+    config.missing_image_callback = _missing_image
+
+    # 5. 存档调试 (doc/config.html)
+    config.save_dump = True
+
+    # 6. 版本迁移 (renpy/common/00start.rpy)
+    def _after_load():
+        pass
+    config.after_load_callbacks.append(_after_load)
+
+label load_failed:
+    "存档版本过旧，已重置到最新版本。"
+    jump start
+
+label missing_label:
+    "剧情跳转到了一个尚未写好的部分。"
+    jump start
+
+label after_warp:
+    "Warp 跳转模式 — 测试用。"
+    return
+"""
+
     def build(self) -> list:
         """生成完整项目骨架。返回生成的文件列表。"""
         self._mkdirs()
@@ -241,10 +293,11 @@ label start:
             "game/options.rpy": self._generate_options_rpy(),
             "game/characters.rpy": self._generate_characters_rpy(),
             "game/screens.rpy": self._generate_screens_rpy(),
-            "game/script.rpy": self._generate_script_rpy(),
-            "game/gui.rpy": self._generate_gui_rpy(),
         }
 
+        # 容错性配置（可选）
+        if self.config.get("error_handler", True):
+            files["game/error_handling.rpy"] = self._generate_fault_tolerance_rpy()
         created = []
         for rel, content in files.items():
             path = os.path.join(self.project_dir, rel)

@@ -1,586 +1,810 @@
 """
-RenPyScript — Python 命令式生成 .rpy 代码
+Ren'Py 脚本生成器 — 用 Python 链式 API 生成 .rpy 文件
+
+基于 Ren'Py 8.5.3 官方 AST (renpy/ast.py) 支持的语句类型：
+  Say, Label, Jump, Call, Return, Menu, Python, If/While 块
+  Show, Scene, Hide, With, ShowLayer, Camera (renpy/ast.py)
+  Play, Stop, Queue, Pause (renpy/common/00action_audio.rpy)
+  Define, Default (renpy/ast.py: 类 Define/Default)
+  Pass (renpy/ast.py: 类 Pass)
 
 用法：
-    script = RenPyScript()
-    script.define("e", 'Character("Eileen", color="#c8ffc8")')
-    script.label("start")
-    script.scene("bg beach", with_="fade")
-    script.show("eileen happy")
-    script.say("e", "嘿，你醒了。")
-    script.say(None, "阳光透过窗帘洒进来。")
-    script.menu([
-        ("你是谁？", "ask_who"),
-        ("我饿了", "ask_food"),
-    ])
-    script.jump("end")
+    s = RenPyScript()
+    s.character("e", "Eileen", color="#c8ffc8")
+    s.label("start")
+    s.scene("bg cafe", with_="fade")
+    s.say("e", "Welcome to the cafe!")
+    s.menu([("Coffee", "coffee"), ("Tea", "tea")])
+    s.call("check_weather")       # Call 子程序
+    s.jump("ending")              # Jump 跳转
+    s.write("game/script.rpy")
 
-    script.label("end")
-    script.say("e", "今天就到这里吧。")
-    script.ret()
-
-    print(script.render())       # 输出 .rpy 字符串
-    script.write("script.rpy")   # 写入文件
-
-参考：Ren'Py 8.5.3 Statement Equivalents (doc/statement_equivalents.html)
+参考：Ren'Py 8.5.3 SDK — renpy/ast.py, renpy/statements.py
 """
 
 import os
-import textwrap
+import re
+from typing import Union, List, Tuple, Optional, Any
 
-# 版本边界守卫 — 导入时自动检查 SDK 版本兼容性
-import sys as _sys
-_guard_path = os.path.dirname(os.path.abspath(__file__))
-if _guard_path not in _sys.path:
-    _sys.path.insert(0, _guard_path)
-try:
-    from _version_guard import check as _version_check, RENPY_MIN_STR as _RENPY_MIN_STR
-except ImportError:
-    _version_check = lambda: True
-    _RENPY_MIN_STR = "8.0.0"
+
+# ── 块管理辅助 ─────────────────────────────────────
+
+
+class BlockScope:
+    """管理缩进块的进入/退出。"""
+
+    def __init__(self, script: "RenPyScript", end_marker: str = ""):
+        self.script = script
+        self.end_marker = end_marker
+
+    def __enter__(self):
+        self.script._indent_level += 1
+        return self
+
+    def __exit__(self, *args):
+        self.script._indent_level -= 1
+        if self.end_marker:
+            self.script.line(self.end_marker)
 
 
 class RenPyScript:
-    """Ren'Py 脚本代码生成器，链式 API。"""
+    """Ren'Py 脚本生成器。
 
-    INDENT = "    "
+    参考 Ren'Py 8.5.3 官方 AST 节点 (renpy/ast.py):
+      Say, Label, Jump, Call, Return, Menu, Python, If, While,
+      Show, Scene, Hide, With, ShowLayer, Camera, Pass,
+      Define, Default, Image, Transform, Init
+    """
 
-    def __init__(self):
-        self._lines = []        # list of (indent_level, code, is_python)
-        self._indent = 0
+    def __init__(self, indent: int = 4):
+        """
+        初始化脚本生成器。
 
-    # ── 基础操作 ──────────────────────────────────────────
+        Args:
+            indent: 缩进空格数（默认 4，符合 Ren'Py 官方规范）
+        """
+        self.lines: List[str] = []
+        self._indent_level: int = 0
+        self._indent_str: str = " " * indent
+        self.errors: List[str] = []
+        self.warnings: List[str] = []
 
-    def _add(self, code: str, is_python: bool = False):
-        """添加多行代码，每行使用当前缩进级别。"""
-        for line in code.split("\n"):
-            self._lines.append((self._indent, line, is_python))
+    # ── 内部工具 ─────────────────────────────────────
 
-    def _raw(self, code: str):
-        """Add raw .rpy line (no indent, no prefix)."""
-        self._add(code, is_python=False)
+    def _indent(self) -> str:
+        """返回当前缩进字符串。"""
+        return self._indent_str * self._indent_level
 
-    def _py(self, code: str):
-        """Add a Python line: $ code"""
-        self._add(code, is_python=True)
+    def _escape_quotes(self, text: str) -> str:
+        """
+        转义文本中的引号，防止生成的 Ren'Py 代码语法错误。
+        Ren'Py 使用双引号字符串，内部双引号必须转义。
+        """
+        return text.replace("\\", "\\\\").replace('"', '\\"')
 
-    # ── 缩进上下文 ────────────────────────────────────────
+    def _quote(self, text: str) -> str:
+        """用双引号包裹文本（自动转义）。"""
+        return '"' + self._escape_quotes(text) + '"'
 
-    def _block(self):
-        """Enter a block (increase indent)."""
-        self._indent += 1
+    def line(self, code: str) -> "RenPyScript":
+        """添加一行代码（自带缩进）。"""
+        self.lines.append(self._indent() + code)
+        return self
 
-    def _end_block(self):
-        """Exit a block (decrease indent)."""
-        if self._indent > 0:
-            self._indent -= 1
+    def blank(self) -> "RenPyScript":
+        """添加空行。"""
+        self.lines.append("")
+        return self
 
-    # ── 页面 / 文件生命周期 ────────────────────────────────
+    def comment(self, text: str) -> "RenPyScript":
+        """添加注释行。"""
+        self.lines.append(self._indent() + "# " + text)
+        return self
 
-    def init(self, priority: int = 0):
-        """init block, optionally with priority."""
+    # ── init 块 ──────────────────────────────────────
+
+    def init(self, priority: int = 0, hide: bool = False) -> BlockScope:
+        """
+        开启 init 块（对应 AST: class Init）。
+
+        Args:
+            priority: 优先级（-9999 ~ 9999，官方默认 0）
+            hide: 是否隐藏（init hide）
+
+        参考：renpy/ast.py class Init
+        """
+        prefix = "init"
         if priority:
-            self._raw(f"init {priority}:")
-        else:
-            self._raw("init:")
-        self._block()
-        return self
+            prefix += f" {priority}"
+        if hide:
+            prefix += " hide"
+        self.line(prefix + ":")
+        return BlockScope(self)
 
-    def end_init(self):
-        self._end_block()
-        return self
+    # ── Label 与流程控制 ──────────────────────────
 
-    def label(self, name: str):
-        """label <name>: — 自动关闭前一个 label 的缩进。"""
-        # 将缩进重置到顶层（关闭前一个 label/block）
-        self._indent = 0
-        self._raw(f"label {name}:")
-        self._block()
-        return self
-
-    def end_label(self):
-        self._end_block()
-        return self
-
-    # ── 声明 ──────────────────────────────────────────────
-
-    def define(self, name: str, value: str):
-        """define <name> = <value>"""
-        self._raw(f"define {name} = {value}")
-        return self
-
-    def default(self, name: str, value: str):
-        """default <name> = <value>"""
-        self._raw(f"default {name} = {value}")
-        return self
-
-    def image(self, name: str, displayable: str):
-        """image <name> = <displayable>"""
-        self._raw(f"image {name} = {displayable}")
-        return self
-
-    def transform(self, name: str, atl_block: str):
-        """transform <name>:\n  <atl_block>"""
-        self._raw(f"transform {name}:")
-        for line in atl_block.strip().split("\n"):
-            self._raw(f"    {line}")
-        return self
-
-    def screen(self, name: str, body: str):
-        """screen <name>:\n  <body> (indented)"""
-        self._raw(f"screen {name}:")
-        for line in body.strip().split("\n"):
-            self._raw(f"    {line}")
-        return self
-
-    def style(self, name: str, parent: str = "", props: dict = None):
-        """style <name> [is <parent>]:\n    <props>"""
-        if parent:
-            self._raw(f"style {name} is {parent}:")
-        else:
-            self._raw(f"style {name}:")
-        self._block()
-        if props:
-            for k, v in props.items():
-                self._raw(f"{k} {v}")
-        self._end_block()
-        return self
-
-    # ── 角色 ──────────────────────────────────────────────
-
-    def character(self, var_name: str, display_name: str, **kwargs) -> str:
-        """Generate define <var_name> = Character(...), return the var_name for use."""
-        args = [f'"{display_name}"']
-        for k, v in kwargs.items():
-            if isinstance(v, str):
-                args.append(f'{k}="{v}"')
-            else:
-                args.append(f"{k}={v}")
-        self.define(var_name, f"Character({', '.join(args)})")
-        return var_name
-
-    # ── 叙事 ──────────────────────────────────────────────
-
-    def say(self, who: str | None, what: str):
-        """<who> "<what>"  或  "<what>" (narration)
-        who = None → narration (用 narrator)
-        自动转义对话中的双引号。
+    def label(self, name: str, hide: bool = False) -> BlockScope:
         """
-        escaped = what.replace('\\', '\\\\').replace('"', '\\"')
-        if who is None or who == "":
-            self._raw(f'"{escaped}"')
-        else:
-            self._raw(f'{who} "{escaped}"')
-        return self
+        创建 label（对应 AST: class Label）。
 
-    def narrator(self, text: str):
-        """narrator "<text>" (等价于 renpy.say(None, text))"""
-        self._raw(f'"{text}"')
-        return self
+        Args:
+            name: label 名称
+            hide: True 则生成 label hide 语句
 
-    def show(self, name: str, at: str = "", onlayer: str = "", as_: str = "", zorder: int = None, behind: list = None, atl: str = "", what: str = "", with_: str = ""):
-        """show <name> [expression <what>] [at <transforms>] [onlayer <layer>] [as <tag>] [zorder <n>] [behind <tags>] [with <trans>]"""
-        if what:
-            parts = ["show", "expression", what, "as", name]
-        else:
-            parts = ["show", name]
-        if at:
-            parts.extend(["at", at])
-        if onlayer:
-            parts.extend(["onlayer", onlayer])
-        if as_:
-            parts.extend(["as", as_])
-        if zorder is not None:
-            parts.extend(["zorder", str(zorder)])
-        if behind:
-            parts.extend(["behind"] + behind)
-        if atl:
-            parts.extend(["at", atl])
-        self._raw(" ".join(parts))
-        if with_:
-            self._raw(f"with {with_}")
-        return self
-
-    def scene(self, name: str = "", with_: str = ""):
-        """scene [<name>] [with <transition>]"""
-        parts = ["scene"]
-        if name:
-            parts.append(name)
-        if with_:
-            parts.extend(["with", with_])
-        self._raw(" ".join(parts))
-        return self
-
-    def hide(self, name: str):
-        """hide <name>"""
-        self._raw(f"hide {name}")
-        return self
-
-    def with_(self, transition: str):
-        """with <transition>"""
-        self._raw(f"with {transition}")
-        return self
-
-    def pause(self, duration: float = None):
-        """pause [<duration>]"""
-        if duration is not None:
-            self._raw(f"pause {duration}")
-        else:
-            self._raw("pause")
-        return self
-
-    # ── 菜单 / 分支 ──────────────────────────────────────
-
-    def menu(self, items: list):
+        参考：renpy/ast.py class Label
         """
-        显示菜单。items = [(label, target_or_none), ...]
-        target_or_none = None 时当作 caption（不可选）
+        prefix = "label" + (" hide" if hide else "")
+        self.line(f"{prefix} {name}:")
+        return BlockScope(self)
+
+    def call(self, label: str, *args: str, pass_args: Optional[str] = None) -> "RenPyScript":
         """
-        self._raw("menu:")
-        self._block()
-        for label, target in items:
-            if target is None:
-                self._raw(f'"{label}":')
-            else:
-                self._raw(f'"{label}":')
-                self._block()
-                self.jump(target)
-                self._end_block()
-        self._end_block()
-        return self
+        生成 call 语句（对应 AST: class Call）。
 
-    def menu_choice(self, label: str, target: str):
-        """Single menu option shorthand."""
-        return self.menu([(label, target)])
+        Args:
+            label: 目标 label 名
+            pass_args: 可选，传递参数表达式，如 "score=100"
 
-    def if_(self, condition: str):
-        """if <condition>:"""
-        self._raw(f"if {condition}:")
-        self._block()
-        return self
-
-    def elif_(self, condition: str):
-        """elif <condition>:"""
-        self._end_block()
-        self._raw(f"elif {condition}:")
-        self._block()
-        return self
-
-    def else_(self):
-        """else:"""
-        self._end_block()
-        self._raw("else:")
-        self._block()
-        return self
-
-    def end_if(self):
-        """End if/elif/else block."""
-        self._end_block()
-        return self
-
-    # ── 控制流 ──────────────────────────────────────────
-
-    def jump(self, target: str):
-        """jump <target>"""
-        self._raw(f"jump {target}")
-        return self
-
-    def call(self, target: str, *args, **kwargs):
-        """call <target> [<args>] [<kwargs>]"""
-        extra = ""
+        参考：renpy/ast.py class Call
+        """
+        line = f"call {label}"
+        if pass_args:
+            line += f" pass ({pass_args})"
         if args:
-            extra += " " + " ".join(str(a) for a in args)
+            line += " " + " ".join(args)
+        return self.line(line)
+
+    def call_expression(self, expr: str) -> "RenPyScript":
+        """
+        生成 call expression 语句（运行时表达式求值跳转）。
+
+        参考：renpy/ast.py class Call
+        """
+        return self.line(f"call expression {expr}")
+
+    def jump(self, label: str) -> "RenPyScript":
+        """
+        生成 jump 语句（对应 AST: class Jump，无条件 GOTO）。
+
+        Args:
+            label: 目标 label 名
+
+        参考：renpy/ast.py class Jump
+        """
+        return self.line(f"jump {label}")
+
+    def jump_expression(self, expr: str) -> "RenPyScript":
+        """
+        生成 jump expression 语句（运行时表达式求值跳转）。
+        """
+        return self.line(f"jump expression {expr}")
+
+    def return_(self) -> "RenPyScript":
+        """
+        生成 return 语句（对应 AST: class Return）。
+
+        参考：renpy/ast.py class Return
+        """
+        return self.line("return")
+
+    def pass_(self) -> "RenPyScript":
+        """
+        生成 pass 语句（对应 AST: class Pass，空操作）。
+
+        参考：renpy/ast.py class Pass
+        """
+        return self.line("pass")
+
+    # ── 条件与循环块 ──────────────────────────────
+
+    def if_(self, condition: str) -> BlockScope:
+        """
+        开启 if 块（对应 AST: class If）。
+
+        Args:
+            condition: 条件表达式，如 "score >= 100"
+
+        参考：renpy/ast.py class If
+        """
+        self.line(f"if {condition}:")
+        return BlockScope(self)
+
+    def elif_(self, condition: str) -> "RenPyScript":
+        """elif 分支（必须在 if 块内）。"""
+        self._indent_level -= 1
+        self.line(f"elif {condition}:")
+        self._indent_level += 1
+        return self
+
+    def else_(self) -> "RenPyScript":
+        """else 分支（必须在 if 块内）。"""
+        self._indent_level -= 1
+        self.line("else:")
+        self._indent_level += 1
+        return self
+
+    def endif(self) -> "RenPyScript":
+        """关闭 if 块（缩进复位）。"""
+        return self
+
+    def while_(self, condition: str) -> BlockScope:
+        """
+        开启 while 循环块（对应 AST: class While）。
+
+        Args:
+            condition: 循环条件表达式
+
+        参考：renpy/ast.py class While
+        """
+        self.line(f"while {condition}:")
+        return BlockScope(self)
+
+    # ── 对话 ─────────────────────────────────────────
+
+    def say(self, who: Optional[str], what: str, interact: bool = True) -> "RenPyScript":
+        """
+        生成 say 语句（对应 AST: class Say）。
+
+        Args:
+            who: 角色变量名，None 为旁白
+            what: 对话文本
+            interact: True 则等待交互（默认）
+
+        参考：renpy/ast.py class Say
+        """
+        text = self._quote(what)
+        if who is None:
+            return self.line(text)
+        else:
+            if interact:
+                return self.line(f'{who} {text}')
+            else:
+                return self.line(f'{who} {text} nointeract')
+
+    def extend(self, what: str) -> "RenPyScript":
+        """
+        生成 extend 语句（续接上一句对话）。
+        """
+        return self.line(self._quote(what))
+
+    def menu(self, items: List[Tuple[str, str]], with_=None) -> "RenPyScript":
+        """
+        生成 menu 语句（对应 AST: class Menu）。
+
+        Args:
+            items: [(显示文本, 跳转label), ...]
+            with_: 可选，转场效果
+
+        参考：renpy/ast.py class Menu
+        """
+        self.line("menu:")
+        self._indent_level += 1
+        for caption, target in items:
+            self.line(f'{self._quote(caption)}:')
+            self._indent_level += 1
+            self.line(f'jump {target}')
+            self._indent_level -= 1
+        if with_:
+            self.line(f'with {with_}')
+        self._indent_level -= 1
+        return self
+
+    # ── 角色 ─────────────────────────────────────────
+
+    def character(self, var: str, name: str, kind: str = "character", **kwargs) -> "RenPyScript":
+        """
+        生成 define 角色语句。
+
+        Args:
+            var: 角色变量名
+            name: 显示名称
+            kind: Character 类型（默认 "character" → Character）
+            **kwargs: 额外参数 (color, image, callback, ctc 等)
+
+        参考：Ren'Py 8.5.3 — renpy/character.py
+              Character 支持 color, who_color, what_color, image,
+              callback, ctc, ctc_position, ctc_pause, cbs 等参数
+        """
+        kwargs_str = ""
         if kwargs:
-            extra += " " + " ".join(f"{k}={v}" for k, v in kwargs.items())
-        self._raw(f"call {target}{extra}")
-        return self
+            parts = [f'{k}={self._quote(str(v)) if isinstance(v, str) else str(v)}'
+                     for k, v in kwargs.items()]
+            kwargs_str = ", " + ", ".join(parts)
 
-    def ret(self):
-        """return"""
-        self._raw("return")
-        return self
-
-    # ── 音频 ──────────────────────────────────────────────
-
-    def play(self, kind: str, file: str, loop: bool = False, fadein: float = None, fadeout: float = None):
-        """
-        play <music|sound|audio> <file> [loop] [fadein <n>] [fadeout <n>]
-        """
-        parts = ["play", kind, file]
-        if loop:
-            parts.append("loop")
-        if fadein is not None:
-            parts.extend(["fadein", str(fadein)])
-        if fadeout is not None:
-            parts.extend(["fadeout", str(fadeout)])
-        self._raw(" ".join(parts))
-        return self
-
-    def stop(self, kind: str, fadeout: float = None):
-        """stop <music|sound|audio> [fadeout <n>]"""
-        parts = ["stop", kind]
-        if fadeout is not None:
-            parts.extend(["fadeout", str(fadeout)])
-        self._raw(" ".join(parts))
-        return self
-
-    def queue(self, kind: str, file: str, loop: bool = False):
-        """queue <music|sound|audio> <file> [loop]"""
-        parts = ["queue", kind, file]
-        if loop:
-            parts.append("loop")
-        self._raw(" ".join(parts))
-        return self
-
-    # ── Python 内联 ─────────────────────────────────────
-
-    def py(self, code: str):
-        """$ <code>"""
-        self._raw(f"$ {code}")
-        return self
-
-    def python_block(self, code: str, hide: bool = False):
-        """
-        python [hide]:\n  <code>
-        """
-        self._raw(f"python{' hide' if hide else ''}:")
-        self._block()
-        for line in code.strip().split("\n"):
-            self._raw(line)
-        self._end_block()
-        return self
-
-    # ── 窗口 / 界面 ─────────────────────────────────────
-
-    def window_show(self, trans: str = None):
-        """window show [<trans>]"""
-        if trans:
-            self._raw(f"window show {trans}")
+        if kind == "character":
+            kind_str = "Character"
         else:
-            self._raw("window show")
+            kind_str = kind
+
+        quoted_name = self._quote(name)
+        return self.line(f'define {var} = {kind_str}({quoted_name}{kwargs_str})')
+
+    # ── 场景与图片 ──────────────────────────────────
+
+    def scene(self, img: str, with_: Optional[str] = None) -> "RenPyScript":
+        """
+        生成 scene 语句（对应 AST: class Scene，清除画面并显示背景）。
+
+        Args:
+            img: 图片名
+            with_: 可选转场，如 "fade", "dissolve"
+
+        参考：renpy/ast.py class Scene
+        """
+        line = f"scene {img}"
+        if with_:
+            self.line(line)
+            return self.with_(with_)
+        return self.line(line)
+
+    def show(self, img: str, at: Optional[str] = None, with_: Optional[str] = None) -> "RenPyScript":
+        """
+        生成 show 语句（对应 AST: class Show）。
+
+        Args:
+            img: 图片名（可包含属性，如 "eileen happy"）
+            at: 可选，transform 名称
+            with_: 可选，转场效果
+
+        参考：renpy/ast.py class Show
+        """
+        line = f"show {img}"
+        if at:
+            line += f" at {at}"
+        self.line(line)
+        if with_:
+            return self.with_(with_)
         return self
 
-    def window_hide(self, trans: str = None):
-        """window hide [<trans>]"""
-        if trans:
-            self._raw(f"window hide {trans}")
+    def hide(self, img: str, with_: Optional[str] = None) -> "RenPyScript":
+        """
+        生成 hide 语句（对应 AST: class Hide）。
+
+        Args:
+            img: 图片 tag
+            with_: 可选转场
+
+        参考：renpy/ast.py class Hide
+        """
+        line = f"hide {img}"
+        self.line(line)
+        if with_:
+            return self.with_(with_)
+        return self
+
+    def show_layer(self, layer: str, at: Optional[str] = None) -> "RenPyScript":
+        """
+        生成 show_layer 语句（对应 AST: class ShowLayer）。
+
+        Args:
+            layer: 图层名称
+            at: 可选 transform
+
+        参考：renpy/ast.py class ShowLayer
+        """
+        line = f"show_layer {layer}"
+        if at:
+            line += f" at {at}"
+        return self.line(line)
+
+    def camera(self, layer: str = "master", at: Optional[str] = None) -> "RenPyScript":
+        """
+        生成 camera 语句（对应 AST: class Camera，控制摄像机）。
+
+        Args:
+            layer: 图层名，默认 "master"
+            at: 可选 transform
+
+        参考：renpy/ast.py class Camera
+        """
+        line = f"camera {layer}"
+        if at:
+            line += f" at {at}"
+        return self.line(line)
+
+    def with_(self, transition: str) -> "RenPyScript":
+        """
+        生成 with 语句（对应 AST: class With，转场效果）。
+
+        Args:
+            transition: 转场名，如 "fade", "dissolve", "pixellate"
+
+        参考：renpy/ast.py class With
+        """
+        return self.line(f"with {transition}")
+
+    # ── Python 块 ────────────────────────────────────
+
+    def python(self, code: str = "", hide: bool = False) -> "RenPyScript":
+        """
+        生成单行或多行 python 块（对应 AST: class Python）。
+
+        Args:
+            code: Python 代码（多行用 \\n 分隔）
+            hide: True 则生成 python hide（不记录存档）
+
+        参考：renpy/ast.py class Python
+        """
+        prefix = "python" + (" hide" if hide else "")
+        if "\n" in code or not code.strip():
+            self.line(f"{prefix}:")
+            self._indent_level += 1
+            for codeline in code.split("\n"):
+                self.line(codeline)
+            self._indent_level -= 1
         else:
-            self._raw("window hide")
+            self.line(f"{prefix}:")
+            self._indent_level += 1
+            self.line(code)
+            self._indent_level -= 1
         return self
 
-    def window_auto(self):
-        """window auto"""
-        self._raw("window auto")
-        return self
-
-    # ── 测试 ──────────────────────────────────────────────
-
-    def testcase(self, name: str):
-        """testcase <name>:"""
-        self._raw(f"testcase {name}:")
-        self._block()
-        return self
-
-    def end_testcase(self):
-        self._end_block()
-        return self
-
-    def assert_(self, condition: str):
-        """assert <condition>"""
-        self._raw(f"assert {condition}")
-        return self
-
-    # ── 实用辅助 ────────────────────────────────────────
-
-    def comment(self, text: str):
-        """# <text>"""
-        for line in text.strip().split("\n"):
-            self._raw(f"# {line}")
-        return self
-
-    def blank(self):
-        """Blank line."""
-        self._add("")
-        return self
-
-    def include(self, rpy_code: str):
-        """Include raw .rpy code."""
-        for line in rpy_code.strip().split("\n"):
-            self._raw(line)
-        return self
-
-    # ── 高级模式方法 ────────────────────────────────────
-
-    def affection_system(self, characters: list, tiers: int = 3, points_per_tier: int = 10):
+    def early_python(self, code: str) -> "RenPyScript":
         """
-        Generate a complete affection system.
-        characters = ["eileen", "lucy"]
-        Creates vars, check labels, and a screen.
+        生成 early python 块（对应 AST: class EarlyPython，在解析早期执行）。
 
-        Returns self for chaining.
+        参考：renpy/ast.py class EarlyPython
         """
-        # 定义变量
-        self.comment("Affection System")
-        for char in characters:
-            for tier_name in ["points", "tier", "flag", "max_points"]:
-                self.default(f"{char}_affection_{tier_name}", "0")
-            self.default(f"{char}_affection_max_points", str(points_per_tier * tiers))
-
-        # check 函数：自动升级
-        self.py("")
-        self.python_block("""
-def check_affection(char):
-    max_pt = globals()[f"{char}_affection_max_points"]
-    pt = globals()[f"{char}_affection_points"]
-    old_tier = globals()[f"{char}_affection_tier"]
-    new_tier = min(int(pt / (max_pt / """ + str(tiers) + """)), """ + str(tiers) + """)
-    if new_tier > old_tier:
-        globals()[f"{char}_affection_tier"] = new_tier
-        globals()[f"{char}_affection_flag"] = True
-""".strip())
+        self.line("python early:")
+        self._indent_level += 1
+        for codeline in code.split("\n"):
+            self.line(codeline)
+        self._indent_level -= 1
         return self
 
-    def change_affection(self, char: str, delta: int, show_notify: bool = True):
-        """Add or subtract affection points for a character."""
-        self.py(f"{char}_affection_points = max(0, min({char}_affection_points + {delta}, {char}_affection_max_points))")
-        self.py(f"check_affection('{char}')")
-        if show_notify:
-            self.py(f"renpy.notify('{char} 好感度变化: {delta:+d}')")
+    # ── 变量定义 ─────────────────────────────────────
+
+    def define(self, var: str, value: str) -> "RenPyScript":
+        """
+        生成 define 语句（对应 AST: class Define，编译时常量）。
+
+        Args:
+            var: 变量名
+            value: 值的表达式
+
+        参考：renpy/ast.py class Define
+        """
+        return self.line(f"define {var} = {value}")
+
+    def default(self, var: str, value: str) -> "RenPyScript":
+        """
+        生成 default 语句（对应 AST: class Default，存档持久化变量）。
+
+        Args:
+            var: 变量名
+            value: 初始值表达式
+
+        注意：修改 default 初始值不会影响已存在的存档
+        参考：renpy/ast.py class Default
+        """
+        return self.line(f"default {var} = {value}")
+
+    # ── 图片与 transform ─────────────────────────────
+
+    def image(self, name: str, expr: str) -> "RenPyScript":
+        """
+        生成 image 语句（对应 AST: class Image）。
+
+        Args:
+            name: 图片名
+            expr: 显示表达式，如 '"bg.png"'
+
+        参考：renpy/ast.py class Image
+        """
+        return self.line(f"image {name} = {expr}")
+
+    def transform(self, name: str, body: str) -> "RenPyScript":
+        """
+        生成 transform 语句（对应 AST: class Transform，ATL 变换）。
+
+        Args:
+            name: transform 名称
+            body: ATL 定义体（多行用 \\n）
+
+        参考：renpy/ast.py class Transform
+        """
+        self.line(f"transform {name}:")
+        self._indent_level += 1
+        for line in body.split("\n"):
+            self.line(line)
+        self._indent_level -= 1
         return self
 
-    def gallery_screen(self, name: str, images: list, cols: int = 2, rows: int = 2):
-        """
-        Generate an image gallery screen.
-        images = [("bg_beach_unlock", "bg beach", "gallery_thumb_beach"), ...]
-        """
-        per_page = cols * rows
-        self.comment(f"Gallery Screen: {name}")
-        self.default(f"{name}_unlocked", "[]")
-        self.default(f"{name}_page", "0")
+    # ── 音频 ─────────────────────────────────────────
 
-        # unlock button
-        self.py("")
-        self.label(f"{name}_unlock_all")
-        self.py(f"{name}_unlocked = [{', '.join(f'\"{img[0]}\"' for img in images)}]")
-        self.ret()
-        self.end_label()
+    def play(self, channel: str, file: str, **kwargs) -> "RenPyScript":
+        """
+        生成 play 语句（播放音频）。
 
-        # screen
-        self.screen(name, f"""
-grid {cols} {rows}:
-    spacing 10
-    xalign 0.5 yalign 0.5
-    for i in range({per_page}):
-        $ idx = {name}_page * {per_page} + i
-        if idx < len({name}_unlocked):
-            imagebutton:
-                idle {name}_unlocked[idx]
-                action ShowMenu("view_{name}")  # TODO: 替换为目标屏幕名
-        else:
-            null
-textbutton "上一页" xalign 0.3 yalign 0.95 action SetVariable("{name}_page", max(0, {name}_page - 1))
-textbutton "下一页" xalign 0.7 yalign 0.95 action SetVariable("{name}_page", min({name}_page + 1, {len(images)} // {per_page}))
-""")
+        Args:
+            channel: 频道名，如 "music", "sound", "voice"
+            file: 音频文件路径
+            **kwargs: 可选参数: loop, fadein, fadeout, volume 等
+
+        参考：Ren'Py 8.5.3 — renpy/common/00action_audio.rpy class Play
+              renpy/audio/audio.py renpy.music.play()
+        """
+        kw_str = " " + " ".join(f"{k} {v}" for k, v in kwargs.items()) if kwargs else ""
+        return self.line(f"play {channel} {self._quote(file)}{kw_str}")
+
+    def stop(self, channel: str) -> "RenPyScript":
+        """
+        生成 stop 语句（停止音频播放）。
+
+        Args:
+            channel: 频道名
+
+        参考：renpy/common/00action_audio.rpy class Stop
+        """
+        return self.line(f"stop {channel}")
+
+    def queue(self, channel: str, file: str) -> "RenPyScript":
+        """
+        生成 queue 语句（排队播放音频）。
+
+        Args:
+            channel: 频道名
+            file: 音频文件
+
+        参考：renpy/common/00action_audio.rpy class Queue
+        """
+        return self.line(f"queue {channel} {self._quote(file)}")
+
+    # ── 其他控制 ─────────────────────────────────────
+
+    def pause(self, delay: Optional[float] = None) -> "RenPyScript":
+        """
+        生成 pause 语句（暂停等待）。
+
+        Args:
+            delay: 秒数，None 等待用户点击
+        """
+        if delay is None:
+            return self.line("pause")
+        return self.line(f"pause {delay}")
+
+    def window_show(self, transition: Optional[str] = None) -> "RenPyScript":
+        """
+        生成 window show 语句（显示对话窗口）。
+
+        Args:
+            transition: 可选转场
+
+        参考：renpy/common/00window.rpy
+        """
+        line = "window show"
+        if transition:
+            line += f" {transition}"
+        return self.line(line)
+
+    def window_hide(self, transition: Optional[str] = None) -> "RenPyScript":
+        """
+        生成 window hide 语句（隐藏对话窗口）。
+        """
+        line = "window hide"
+        if transition:
+            line += f" {transition}"
+        return self.line(line)
+
+    def end(self) -> "RenPyScript":
+        """
+        添加结束注释标记（可选，仅用于可读性）。
+        """
+        return self.line("# end")
+
+    # ── screen 定义 ──────────────────────────────────
+
+    def _raw(self, code: str) -> "RenPyScript":
+        """添加一行不加缩进的代码（旧 patterns 兼容）。"""
+        self.lines.append(code)
         return self
 
-    # ── 渲染 ──────────────────────────────────────────────
+    def screen(self, name: str, tag: Optional[str] = None) -> BlockScope:
+        """
+        开启 screen 定义块（对应 AST: class Screen）。
+
+        Args:
+            name: screen 名称
+            tag: 可选，screen tag
+
+        参考：renpy/ast.py class Screen
+        """
+        line = f"screen {name}"
+        if tag:
+            line += f" tag {tag}"
+        self.line(line + ":")
+        return BlockScope(self)
+
+    def style(self, name: str, parent: Optional[str] = None) -> BlockScope:
+        """
+        开启 style 定义块（对应 AST: class Style）。
+
+        Args:
+            name: style 名称
+            parent: 可选，父 style 名
+
+        参考：renpy/ast.py class Style
+        """
+        line = f"style {name}"
+        if parent:
+            line += f" is {parent}"
+        self.line(line + ":")
+        return BlockScope(self)
+
+    # ── 输出 ─────────────────────────────────────────
 
     def render(self) -> str:
-        """Generate the complete .rpy string."""
-        result = []
-        for indent, code, is_python in self._lines:
-            ind = self.INDENT * indent
-            line = code
-            # Python line gets $ prefix at indentation level 0
-            # (Within python blocks, it's already indented correctly)
-            result.append(f"{ind}{line}")
-        return "\n".join(result)
+        """返回生成的完整脚本字符串。"""
+        return "\n".join(self.lines)
 
-    def write(self, path: str, encoding: str = "utf-8"):
-        """Write the rendered .rpy to a file."""
-        content = self.render()
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    def write(self, path: str, encoding: str = "utf-8") -> "RenPyScript":
+        """
+        将生成的脚本写入 .rpy 文件（UTF-8 编码）。
+
+        Args:
+            path: 输出文件路径
+            encoding: 编码（默认 utf-8，符合 Ren'Py 规范）
+        """
+        dir_name = os.path.dirname(path)
+        if dir_name and not os.path.isdir(dir_name):
+            os.makedirs(dir_name, exist_ok=True)
         with open(path, "w", encoding=encoding) as f:
-            f.write(content)
-        return path
+            f.write(self.render())
+        return self
 
-    # ── 便捷工厂 ────────────────────────────────────────
+    # ── 验证 ─────────────────────────────────────────
 
-    @classmethod
-    def quick(cls, lines: list[str]) -> "RenPyScript":
+    def validate(self) -> List[str]:
         """
-        Quick mode: pass a list of .rpy lines directly.
-        Useful for simple scripts.
+        基本语法验证：检查常见问题。
+
+        Returns:
+            错误消息列表（空列表 = 无错误）
         """
-        script = cls()
-        for line in lines:
-            script._raw(line)
-        return script
+        errors = []
+        text = self.render()
 
-    @classmethod
-    def from_file(cls, path: str) -> "RenPyScript":
-        """Read an existing .rpy file into a RenPyScript for editing."""
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read()
-        return cls.quick(content.split("\n"))
+        for i, line in enumerate(text.split("\n"), 1):
+            if line.count('"') % 2 != 0:
+                errors.append(f"行 {i}: 引号未闭合 — {line.strip()}")
+
+        labels = []
+        for line in text.split("\n"):
+            m = re.match(r'^\s*label\s+(\S+)\s*:', line)
+            if m:
+                labels.append(m.group(1))
+
+        seen = set()
+        for lbl in labels:
+            if lbl in seen:
+                errors.append(f"重复 label: {lbl}")
+            seen.add(lbl)
+
+        targets = set()
+        for line in text.split("\n"):
+            m = re.match(r'^\s*(?:jump|call)\s+(\S+)', line)
+            if m and not m.group(1).startswith("expression"):
+                targets.add(m.group(1))
+
+        for t in targets:
+            if t not in seen and not t.startswith("_"):
+                errors.append(f"可能的悬空引用: {t} — 目标 label 不存在")
+
+        return errors
 
 
-# ── 命令行快速生成 ─────────────────────────────────────
+# ── 便捷函数 ──────────────────────────────────────────
+
+
+def demo_script() -> RenPyScript:
+    """生成一个包含所有主要语句类型的示例脚本。"""
+    s = RenPyScript()
+
+    s.comment("Ren'Py 示例脚本 — 展示所有语句类型")
+    s.comment("基于 Ren'Py 8.5.3 AST (renpy/ast.py)")
+    s.blank()
+
+    s.character("e", "Eileen", color="#c8ffc8")
+    s.character("l", "Lucy", color="#c8c8ff")
+    s.blank()
+
+    s.define("config.name", '"My Game"')
+    s.define("config.version", '"1.0"')
+    s.blank()
+
+    s.default("player_level", "1")
+    s.default("gold", "100")
+    s.blank()
+
+    s.label("start")
+    s.scene("bg cafe", with_="fade")
+    s.show("eileen happy", with_="dissolve")
+    s.say("e", "Hello! Welcome to our cafe!")
+    s.say("l", "Would you like to see the menu?")
+    s.menu([
+        ("Yes, please!", "menu_yes"),
+        ("Maybe later.", "menu_no"),
+    ])
+    s.blank()
+
+    s.label("menu_yes")
+    s.say("e", "Great choice!")
+    s.pause(1.0)
+    s.jump("ending")
+    s.blank()
+
+    s.label("menu_no")
+    s.say("e", "Take your time!")
+    s.blank()
+
+    s.label("ending")
+    s.say(None, "Let's check the weather...")
+    s.call("check_weather", pass_args="season=\"spring\"")
+    s.return_()
+    s.blank()
+
+    s.label("check_weather")
+    s.say("e", "The weather is lovely today!")
+    s.play("sound", "audio/bell.ogg")
+    s.return_()
+    s.blank()
+
+    s.label("python_demo")
+    s.python("""
+gold += 50
+player_level += 1
+renpy.notify("Level up!")
+""")
+    s.say(None, "You leveled up!")
+    s.blank()
+
+    s.label("loop_demo")
+    s.default("counter", "0")
+    s.while_("counter < 3")
+    s.say(None, "Looping...")
+    s.python("counter += 1")
+    s.say(None, "Done looping!")
+
+    s.end()
+
+    return s
+
+
+# ── CLI ─────────────────────────────────────────────
+
 
 def main():
-    """CLI: python bridge.py <output.rpy>"""
-    import sys
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Ren'Py 脚本生成器（支持 Unicode 和引号转义）")
+    parser.add_argument("--output", "-o", default="output.rpy",
+                        help="输出文件路径")
+    parser.add_argument("--demo", action="store_true",
+                        help="生成示例脚本")
+    parser.add_argument("--validate", action="store_true",
+                        help="验证生成的脚本")
 
-    script = RenPyScript()
+    args = parser.parse_args()
 
-    # 示例：生成一个带好感度系统的简短游戏开局
-    script.comment("Generated by RenPyScript bridge")
-    script.blank()
-    script.define("config.name", '"我的故事"')
-    script.define("config.version", '"0.1"')
-    script.define("gui.init", "(1280, 720)")
-    script.blank()
+    if args.demo:
+        s = demo_script()
+        s.write(args.output)
+        print(f"✅ 示例脚本已生成：{args.output}")
 
-    # 角色
-    e = script.character("e", "艾琳", color="#c8ffc8")
-    l = script.character("l", "陆辰", color="#c8c8ff")
-
-    # 好感度系统
-    script.affection_system(["e", "l"])
-    script.blank()
-
-    # 游戏开始
-    script.label("start")
-    script.scene("bg classroom", with_="fade")
-    script.show("eileen happy")
-    script.with_("dissolve")
-    script.say("l", "嘿，你听说了吗？")
-    script.say("e", "听说什么？")
-    script.menu([
-        ("关于考试的事", "exam"),
-        ("没什么，算了", "skip"),
-    ])
-
-    script.label("exam")
-    script.change_affection("e", 5)
-    script.say("l", "下周就要期中考了。")
-    script.jump("end")
-
-    script.label("skip")
-    script.change_affection("e", -2)
-    script.say("l", "好吧，那就不说了。")
-    script.jump("end")
-
-    script.label("end")
-    script.say("e", "那我先走了。")
-    script.ret()
-
-    if len(sys.argv) > 1:
-        path = script.write(sys.argv[1])
-        print(f"✅ 已写入 {path}")
+        if args.validate:
+            errors = s.validate()
+            if errors:
+                print(f"⚠️  发现 {len(errors)} 个问题:")
+                for e in errors:
+                    print(f"   {e}")
+            else:
+                print("✅ 验证通过，未发现问题")
     else:
-        print(script.render())
+        print("使用 --demo 生成示例脚本")
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    exit(main())

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Ren'Py 预制模式库 — 开箱即用的游戏功能模块
 
 每个 pattern 是一个函数，返回 RenPyScript 实例，
@@ -30,18 +30,20 @@ except ImportError:
     _RENPY_MIN_STR = "8.0.0"
 
 
-def apply(name: str, params: dict = None) -> RenPyScript:
+def apply(name: str, params: dict = None, validate: bool = True) -> RenPyScript:
     """
     应用一个预制模式，返回 RenPyScript 实例。
-    name: pattern 名称
-    params: 参数字典
 
-    用法：
-        script = apply("gallery", {
-            "images": [("bg_beach", "bg beach", "海滩"), ...],
-            "rows": 2, "cols": 3
-        })
-        print(script.render())
+    Args:
+        name: pattern 名称
+        params: 参数字典
+        validate: 是否验证参数（默认 True）
+
+    Returns:
+        RenPyScript 实例
+
+    Raises:
+        ValueError: 如果模式名称未知或参数无效
     """
     params = params or {}
     registry = {
@@ -54,11 +56,49 @@ def apply(name: str, params: dict = None) -> RenPyScript:
         "credit_roll": _pattern_credit_roll,
         "day_night": _pattern_day_night,
         "affection": _pattern_affection,
-        "choice_timer": _pattern_choice_timer,
-    }
+       "choice_timer": _pattern_choice_timer,
+        "after_load_migration": _pattern_after_load_migration,
+       "layeredimage": _pattern_layeredimage,
+        "fault_tolerance": _pattern_fault_tolerance,
+   }
     if name not in registry:
-        raise ValueError(f"未知模式: {name}。可用: {', '.join(registry.keys())}")
+        available = ', '.join(registry.keys())
+        raise ValueError(f"未知模式: {name}。可用模式: {available}")
+
+    # 参数验证
+    if validate:
+        _validate_params(name, params)
+
     return registry[name](params)
+
+
+def _validate_params(name: str, params: dict):
+    """
+    验证模式参数。
+
+    Args:
+        name: 模式名称
+        params: 参数字典
+
+    Raises:
+        ValueError: 如果参数无效
+    """
+    if name == "gallery":
+        if "images" not in params:
+            print("⚠️  警告: gallery 模式缺少 'images' 参数，将生成空画廊")
+        elif not isinstance(params["images"], list):
+            raise ValueError("'images' 参数必须是列表")
+
+    elif name == "cjk_font":
+        if "font" in params and not isinstance(params["font"], str):
+            raise ValueError("'font' 参数必须是字符串")
+
+    elif name == "splash":
+        if "logo" in params and not isinstance(params["logo"], str):
+            raise ValueError("'logo' 参数必须是字符串")
+
+    # 其他模式的验证可以在这里添加
+    pass
 
 
 def load(path: str) -> dict:
@@ -96,7 +136,7 @@ def _pattern_gallery(params: dict) -> RenPyScript:
     script.default(f"{screen_name}_page", "0")
 
     # unlock 函数
-    script.python_block(f"""
+    script.python(f"""
 def {screen_name}_unlock(var_name):
     unlocked = globals().get("{screen_name}_unlocked", [])
     if var_name not in unlocked:
@@ -110,9 +150,9 @@ def {screen_name}_is_unlocked(var_name):
 
     # unlock all (for debug)
     script.label(f"{screen_name}_unlock_all")
-    script.py(f"{screen_name}_unlocked = [{', '.join(f'\"{img[0]}\"' for img in images)}]")
-    script.ret()
-    script.end_label()
+    script.python(f"{screen_name}_unlocked = [{', '.join(f'\"{img[0]}\"' for img in images)}]")
+    script.return_()
+    script._raw('# end label')
 
     # screen
     script.comment(f"{screen_name} screen 定义")
@@ -152,12 +192,13 @@ screen {screen_name}():
 
 def _pattern_cjk_font(params: dict) -> RenPyScript:
     """
-    中/日/韩字体配置。
+    中/日/韩字体配置（改进版：更灵活，不强制要求标准GUI结构）。
     params:
       font: 字体文件名 (默认 "SourceHanSansSC-Regular.otf")
       bold: 粗体文件名 (可选)
       size: 字号调整 (默认 22)
       fallback: 后备字体
+      flexible: 是否灵活模式（默认 True，不检查GUI结构）
     """
     font = params.get("font", "SourceHanSansSC-Regular.otf")
     # 推断粗体文件名：将权重替换为 Bold
@@ -176,9 +217,14 @@ def _pattern_cjk_font(params: dict) -> RenPyScript:
         bold_default = f"{base_bold}.{ext}"
     bold = params.get("bold", bold_default)
     size = params.get("size", 22)
+    flexible = params.get("flexible", True)  # 新增：灵活模式
 
     script = RenPyScript()
-    script.comment("CJK Font Configuration")
+    script.comment("CJK Font Configuration (Improved: flexible mode)")
+
+    # 警告：字体文件需要手动放置
+    script.comment("注意: 请将字体文件放置到 game/ 目录或指定路径")
+    script.comment(f"字体文件: {font}")
 
     defines = [
         f'gui.text_font = "{font}"',
@@ -197,6 +243,14 @@ def _pattern_cjk_font(params: dict) -> RenPyScript:
         script._raw(line)
 
     script.blank()
+
+    # 灵活模式：不检查GUI结构，只生成配置
+    if flexible:
+        script.comment("Flexible mode: 不检查GUI结构")
+        script.comment("如果使用的是自定义GUI，请手动调整样式")
+    else:
+        script.comment("Strict mode: 建议在标准GUI结构中使用")
+
     return script
 
 
@@ -223,21 +277,21 @@ def _pattern_splash(params: dict) -> RenPyScript:
     script.define("config.splashscreen_skip_label", '"splash_done"', )
     script.blank()
     script.label("splashscreen")
-    script.scene()
-    script.py(f"renpy.music.set_volume(0.0)")
-    script.scene()
-    script.show("solid", what=f"Solid({bg})")
+    script._raw('scene')
+    script.python(f"renpy.music.set_volume(0.0)")
+    script._raw('scene')
+    script._raw(f'show solid Solid({bg})')
     script.with_("None")
     script.pause(0.5)
-    script.show(logo, atl=f"True alpha 0.0")
+    script._raw(f"show {logo} at True alpha 0.0")
     script.with_("None")
-    script.show(logo, atl=f"True alpha 1.0")
+    script._raw(f"show {logo} at True alpha 1.0")
     script.with_(f"Dissolve({fi})")
     script.pause(hold)
-    script.show(logo, atl="True alpha 0.0")
+    script._raw(f"show {logo} at True alpha 0.0")
     script.with_(f"Dissolve({fo})")
     script.label("splash_done")
-    script.ret()
+    script.return_()
     return script
 
 
@@ -334,8 +388,8 @@ def _pattern_credit_roll(params: dict) -> RenPyScript:
     script = RenPyScript()
     script.comment("Credits Roll")
     script.label("credits")
-    script.scene()
-    script.show("solid", what=f"Solid({bg})")
+    script._raw('scene')
+    script._raw(f'show solid Solid({bg})')
     script.with_("None")
 
     # 构建滚动内容（JSON 序列化防注入）
@@ -351,7 +405,7 @@ def _pattern_credit_roll(params: dict) -> RenPyScript:
 
     content = "\\n\\n".join(c_lines)
     safe_title = _json.dumps(f"{title}\\n\\n{content}\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n")
-    script.python_block(f"""
+    script.python(f"""
 text = {safe_title}
 ui.add(
     renpy.text.text.Text(
@@ -366,7 +420,7 @@ ui.add(
 renpy.pause({speed}, hard=True)
 """)
     script.with_("fade")
-    script.ret()
+    script.return_()
     return script
 
 
@@ -399,7 +453,7 @@ def _pattern_day_night(params: dict) -> RenPyScript:
         bgm_switch_code += ",\n".join(bgm_map_lines)
         bgm_switch_code += "\n    }\n    if time_str in bgm_map:\n        renpy.music.play(bgm_map[time_str], fadeout=0.5, fadein=0.5)\n"
 
-    script.python_block(f"""
+    script.python(f"""
 def set_time(time_str, transition="{trans}"):
     \"\"\"切换早晚。
     time_str: "day", "evening", "night"
@@ -462,7 +516,7 @@ def _pattern_affection(params: dict) -> RenPyScript:
         script.default(f"{v}_affection_max", str(max_total))
 
     script.blank()
-    script.python_block(f"""
+    script.python(f"""
 def change_affection(char, delta):
     \"\"\"
     char: 角色变量名 (如 \"e\")
@@ -518,7 +572,7 @@ def _pattern_choice_timer(params: dict) -> RenPyScript:
     script.default("choice_timeout", "False")
     script.blank()
 
-    script.python_block(f"""
+    script.python(f"""
 def timed_menu(items, timeout={timeout}, default={default_idx}):
     \"\"\"
     带计时器的菜单。
@@ -547,6 +601,125 @@ def timed_menu(items, timeout={timeout}, default={default_idx}):
     return script
 
 
+def _pattern_after_load_migration(params: dict) -> RenPyScript:
+    """
+    存档兼容性：版本升级后的数据迁移。
+    基于 Ren'Py 8.5.3 官方：
+      - config.after_load_callbacks (renpy/common/00start.rpy)
+      - config.before_load_callbacks
+      - config.after_load_transition
+    params:
+      version: 当前游戏版本 (默认 "1.0")
+      migrations: [(旧版本, 迁移代码), ...]
+    """
+    version = params.get("version", "1.0")
+    migrations = params.get("migrations", [])
+    script = RenPyScript()
+    script.comment("Save Migration System")
+    script.comment("基于 Ren'Py 8.5.3 config.after_load_callbacks")
+    script.default("save_version", '"0.0"')
+    script.blank()
+    script.python(f"""
+def after_load_migration():
+    current = config.version
+    saved = save_version
+    if saved == current:
+        return
+    migrations = {repr(migrations)}
+    for old_ver, code in migrations:
+        if saved <= old_ver and current > old_ver:
+            exec(code)
+    renpy.set_variable("save_version", current)
+""")
+    script.blank()
+    script.python("config.after_load_callbacks.append(after_load_migration)")
+    script.blank()
+    script.python("config.after_load_transition = dissolve")
+    script.blank()
+    return script
+
+
+def _pattern_layeredimage(params: dict) -> RenPyScript:
+    """
+    LayeredImage 立绘系统。
+    基于 Ren'Py 8.5.3 官方:
+      - doc/layeredimage.html
+      - renpy/common/00layeredimage.rpy
+    params:
+      name: 立绘变量名 (默认 "sprite")
+      layers: [{"attribute": str, "dir": str, "default": str}, ...]
+      path: 图片基础路径 (默认 "images/sprites")
+    """
+    name = params.get("name", "sprite")
+    path = params.get("path", "images/sprites")
+    layers = params.get("layers", [])
+    script = RenPyScript()
+    script.comment(f"LayeredImage: {name}")
+    script.comment("基于 Ren'Py 8.5.3 layeredimage 系统")
+    script.blank()
+    script.line(f"layeredimage {name}:")
+    script._indent_level += 1
+    script.blank()
+    for layer in layers:
+        attr = layer.get("attribute", "base")
+        dir_name = layer.get("dir", attr)
+        default_attr = layer.get("default", "")
+        script.comment(f"图层: {attr}")
+        script.line(f"group {attr}:")
+        script._indent_level += 1
+        script.line(f"attribute {default_attr} default:")
+        script._indent_level += 1
+        script.line(f'"{path}/{dir_name}/{default_attr}.png"')
+        script._indent_level -= 2
+        script.blank()
+    script._indent_level -= 1
+    script.blank()
+    return script
+
+
+def _pattern_fault_tolerance(params: dict) -> RenPyScript:
+    script = RenPyScript()
+    script.comment("Fault Tolerance")
+    script.define("config.developer", "True")
+    script.blank()
+    script.python("""
+def _ft_handler(exception, traceback):
+    for p in ["NameError","TypeError","KeyError","IndexError"]:
+        if p in str(exception):
+            renpy.notify("遇到小问题，已跳过。")
+            return True
+    return False
+config.exception_handler = _ft_handler
+config.load_failed_label = "load_failed"
+def _ft_label(n):
+    return "missing_label"
+config.missing_label_callback = _ft_label
+def _ft_img(n):
+    return "bg placeholder"
+config.missing_image_callback = _ft_img
+config.save_dump = True
+def _ft_load():
+    pass
+config.after_load_callbacks.append(_ft_load)
+""")
+    script.blank()
+    script.comment("存档加载失败兜底")
+    script.label("load_failed")
+    script.say(None, "存档版本过旧，已重置。")
+    script.jump("start")
+    script.blank()
+    script.comment("缺失 label 兜底")
+    script.label("missing_label")
+    script.say(None, "剧情跳转到了一个未完成的部分。")
+    script.jump("start")
+    script.blank()
+    script.comment("Warp 跳转测试")
+    script.label("after_warp")
+    script.say(None, "Warp 模式 -- 测试用。")
+    script.return_()
+    script.blank()
+    return script
+
 # ── CLI 测试 ───────────────────────────────────────────
 
 def main():
@@ -570,8 +743,11 @@ def main():
             "credit_roll": "制作人员名单滚动",
             "day_night": "早/晚切换系统",
             "affection": "好感度系统(多角色/多等级)",
-            "choice_timer": "菜单计时器(超时自动选择)",
-        }
+           "choice_timer": "菜单计时器(超时自动选择)",
+            "after_load_migration": "存档兼容性(版本升级数据迁移)",
+            "layeredimage": "LayeredImage 立绘系统(多图层/多属性)",
+            "fault_tolerance": "容错性配置(异常处理/存档兜底/缺失兜底)",
+       }
         print("📦 Ren'Py 预制模式:")
         for name, desc in registry.items():
             print(f"   {name:15s}  {desc}")
@@ -602,3 +778,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+

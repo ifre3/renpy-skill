@@ -79,3 +79,12 @@
 - `diagnose.py` 只能检测已知错误模式（SyntaxError、NameError、文件缺失等）
 - 逻辑错误（如剧情分歧条件写反）不会被捕获
 - 嵌套的 Python 语法错误（如 `python:` 块内的错误）定位可能不准确
+ 
+ ## 存档迁移
+ 
+ - 修改 `default` 变量的初始值不会影响已有存档（存档中保留旧值）
+ - 删除 `default` 变量可能导致加载旧存档时报错
+ - Ren'Py 8.5.3 提供 `config.after_load_callbacks` 和 `config.before_load_callbacks` 用于版本迁移
+ - 官方建议使用 `after_load label 做数据迁移（参考：renpy/common/00start.rpy）
+ - 生成新存档后旧存档仍可加载，但回滚到旧存档可能触发迁移代码重复执行
+ - 使用 `after_load_migration` pattern 可以自动生成迁移骨架

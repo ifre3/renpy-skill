@@ -1,5 +1,6 @@
 """
 Ren'Py .rpy ↔ JSON 双向转换 — 版本控制 / 机器翻译 / 迁移
+支持 Unicode（中文/日文/韩文）和复杂项目结构
 
 用法：
     # .rpy → JSON
@@ -13,6 +14,7 @@ Ren'Py .rpy ↔ JSON 双向转换 — 版本控制 / 机器翻译 / 迁移
 import os
 import json
 import re
+import glob
 
 
 class ExportError(Exception):
@@ -23,22 +25,59 @@ class ExportError(Exception):
 class Export:
     """Ren'Py .rpy ↔ JSON 双向转换。"""
 
-    # 需要提取的 Ren'Py 语句类型
-    # (?:[^"\\]|\\.)* 可匹配含转义引号 \" 的文本
+    # 需要提取的 Ren'Py 语句类型（支持 Unicode）
+    # 改进的正则表达式，支持中文/日文/韩文字符
     LINE_PATTERNS = {
         "say": re.compile(
-            r'^\s*(?P<who>\w+)?\s*"'
-            r'(?P<what>(?:[^"\\]|\\.)*)"\s*$'
+            # 支持 Unicode 字符名：匹配任何非空白、非引号、非 # 的字符序列
+            r'^\s*([^\s"#][^\s"#]*?)\s+"(?P<what>(?:[^"\\]|\\.)*)"\s*(?:#.*)?$'
         ),
         "narrator": re.compile(
-            r'^\s*"(?P<what>(?:[^"\\]|\\.)*)"\s*$'
+            # 旁白：行首直接是引号
+            r'^\s*"(?P<what>(?:[^"\\]|\\.)*)"\s*(?:#.*)?$'
         ),
         "comment": re.compile(r'^\s*#\s*(?P<text>.*)$'),
+        "menu": re.compile(
+            # menu 选项：包含引号的选项
+            r'^\s*"((?:[^"\\]|\\.)*)"\s*:$'
+        ),
     }
 
-    def __init__(self, project_dir: str):
+    def __init__(self, project_dir: str, game_dir: str = None):
+        """
+        初始化导出器。
+
+        Args:
+            project_dir: 项目根目录
+            game_dir: game/ 目录路径（可选，自动检测）
+        """
         self.project_dir = os.path.abspath(project_dir)
-        self.game_dir = os.path.join(self.project_dir, "game")
+        self.game_dir = game_dir or self._detect_game_dir()
+        self.errors = []  # 存储处理过程中的错误
+
+    def _detect_game_dir(self) -> str:
+        """自动检测 game/ 目录位置。"""
+        candidates = [
+            os.path.join(self.project_dir, "game"),
+            os.path.join(self.project_dir, "mod_assets", "game"),
+            os.path.join(self.project_dir, "submods", "game"),
+        ]
+
+        for path in candidates:
+            if os.path.isdir(path):
+                rpy_files = glob.glob(os.path.join(path, "**/*.rpy"), recursive=True)
+                if rpy_files:
+                    return path
+
+        # 搜索项目目录
+        for root, dirs, files in os.walk(self.project_dir):
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('cache', '__pycache__')]
+            if any(f.endswith('.rpy') for f in files):
+                return root
+
+        default = os.path.join(self.project_dir, "game")
+        self.errors.append(f"⚠️  未找到 game/ 目录，使用默认位置：{default}")
+        return default
 
     # ── 提取为 JSON ─────────────────────────────────────
 
@@ -54,18 +93,37 @@ class Export:
                 "renpy_version": "8.5.3",
                 "project": os.path.basename(self.project_dir),
                 "exported_from": "rpy",
+                "encoding": "utf-8",
+                "supports_unicode": True,
             },
             "files": {},
+            "errors": [],
         }
 
-        for fpath in self._rpy_files():
-            rel = os.path.relpath(fpath, self.game_dir)
-            with open(fpath, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
+        rpy_files = self._rpy_files()
+        if not rpy_files:
+            data["errors"].append("未找到任何 .rpy 文件")
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return data
 
-            entries = self._parse_file(content, include_all=include_all)
-            if entries:
-                data["files"][rel] = entries
+        for fpath in rpy_files:
+            rel = os.path.relpath(fpath, self.game_dir)
+            try:
+                with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+
+                entries = self._parse_file(content, include_all=include_all)
+                if entries:
+                    data["files"][rel] = entries
+
+            except Exception as e:
+                error_msg = f"读取文件失败：{rel} ({e})"
+                data["errors"].append(error_msg)
+                self.errors.append(error_msg)
+
+        # 保存错误
+        data["errors"].extend(self.errors)
 
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -168,13 +226,21 @@ class Export:
                 continue
 
             # 对话 (say "who" "what")
+            # 使用改进的正则，支持 Unicode 字符名
             sm = self.LINE_PATTERNS["say"].match(stripped)
-            if sm and sm.group("who") and not sm.group("who").startswith("$"):
-                entry["type"] = "say"
-                entry["who"] = sm.group("who")
-                entry["text"] = sm.group("what")
-                entries.append(entry)
-                continue
+            if sm:
+                # 提取字符名（第一个引号之前的部分）
+                who_match = re.match(r'^\s*([^\s"#][^\s"#]*)', stripped)
+                if who_match:
+                    who = who_match.group(1)
+                    # 提取对话文本（第一个引号之内的内容）
+                    text_match = re.search(r'"(?P<text>(?:[^"\\]|\\.)*)"', stripped)
+                    if text_match:
+                        entry["type"] = "say"
+                        entry["who"] = who
+                        entry["text"] = text_match.group("text")
+                        entries.append(entry)
+                        continue
 
             # 其他语句（可选）
             if include_all:
@@ -228,12 +294,18 @@ class Export:
             if i in entry_map:
                 e = entry_map[i]
                 if e["type"] == "say":
-                    # 保留原始缩进
+                    # 保留原始缩进和字符名
                     indent = line[:len(line) - len(line.lstrip())]
-                    new_lines.append(f'{indent}{e["who"]} "{e["text"]}"\n')
+                    who = e.get("who", "")
+                    text = e.get("text", "")
+                    # 转义引号
+                    text_escaped = text.replace('"', '\\"')
+                    new_lines.append(f'{indent}{who} "{text_escaped}"\n')
                 elif e["type"] == "narrator":
                     indent = line[:len(line) - len(line.lstrip())]
-                    new_lines.append(f'{indent}"{e["text"]}"\n')
+                    text = e.get("text", "")
+                    text_escaped = text.replace('"', '\\"')
+                    new_lines.append(f'{indent}"{text_escaped}"\n')
                 else:
                     new_lines.append(line)
             else:
@@ -248,9 +320,12 @@ class Export:
         for e in entries:
             t = e.get("type", "other")
             if t == "say":
-                lines.append(f'{e["who"]} "{e["text"]}"')
+                who = e.get("who", "")
+                text = e.get("text", "").replace('"', '\\"')
+                lines.append(f'{who} "{text}"')
             elif t == "narrator":
-                lines.append(f'"{e["text"]}"')
+                text = e.get("text", "").replace('"', '\\"')
+                lines.append(f'"{text}"')
             elif t == "comment":
                 lines.append(f"# {e.get('text', '')}")
             elif t == "other":
@@ -265,11 +340,16 @@ class Export:
         """收集所有 .rpy 文件。"""
         files = []
         if not os.path.isdir(self.game_dir):
+            self.errors.append(f"❌ game/ 目录不存在：{self.game_dir}")
             return files
+
         for root, _, names in os.walk(self.game_dir):
+            if '__pycache__' in root:
+                continue
             for name in names:
                 if name.endswith(".rpy"):
                     files.append(os.path.join(root, name))
+
         return sorted(files)
 
 
@@ -277,22 +357,31 @@ class Export:
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Ren'Py .rpy ↔ JSON 转换")
+    parser = argparse.ArgumentParser(description="Ren'Py .rpy ↔ JSON 转换（支持 Unicode）")
     parser.add_argument("project_dir", help="项目目录")
     parser.add_argument("action", choices=["to-json", "from-json"], help="操作方向")
     parser.add_argument("file", help="JSON 文件路径")
+    parser.add_argument("--game-dir", help="game/ 目录路径（可选，自动检测）")
     parser.add_argument("--output-dir", default=None, help="from-json 时的输出目录")
 
     args = parser.parse_args()
-    exporter = Export(args.project_dir)
+    exporter = Export(args.project_dir, game_dir=args.game_dir)
 
     if args.action == "to-json":
         data = exporter.to_json(args.file)
         print(f"✅ 已导出: {args.file}")
         print(f"   文件数: {len(data.get('files', {}))}")
+        if data.get("errors"):
+            print(f"⚠️  处理过程中的错误：")
+            for err in data["errors"]:
+                print(f"   {err}")
     else:
         count = exporter.from_json(args.file, output_dir=args.output_dir)
         print(f"✅ 已恢复: {count} 个文件")
+        if exporter.errors:
+            print(f"⚠️  处理过程中的错误：")
+            for err in exporter.errors:
+                print(f"   {err}")
 
 
 if __name__ == "__main__":

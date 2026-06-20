@@ -1,12 +1,8 @@
 ---
 name: renpy-dev
-description: "打包/Lint/测试/诊断/导出。当你需要工程工具链时激活。"
+description: "This skill provides packaging, linting, testing, diagnostics, and export workflows for Ren'Py projects. It should be used when the user needs to run SDK CLI commands, analyze project structure, diagnose errors, or export project data."
 compatibility: "renpy>=8.0"
-metadata:
-  openclaw:
-    emoji: 🛠️
-    permissions: ["file.read", "file.write", "exec"]
-    os: ["darwin", "linux", "windows"]
+agent_created: true
 ---
 
 # Ren'Py Dev — 工程工具
@@ -71,3 +67,24 @@ for issue in diagnose_from_file("game/log.txt"):
 ## 版本边界
 
 目标 SDK: Ren'Py ≥ 8.0。SDK 不可达时仅警告，不阻塞（可能脱机生成代码供其他环境使用）。
+ 
+ ## 2026-06-21 改进记录
+ 
+ 基于 Ren'Py 8.5.3 官方 SDK 源码和文档的改进：
+ 
+ ### cli.py
+ - 新增命令: update, director, rmpersistent, add_from, generate_gui, gui_images, 
+   set_project, get_projects_directory, update_old_game, ios_create, ios_populate
+ - 官方依据: doc/cli.html (Ren'Py 8.5.3 CLI 全部命令)
+ - 所有命令签名与官方文档一致
+ 
+ ### diagnose.py
+ - 新增 Ren'Py 特有错误模式: LabelNotFound, ScreenNotFound, ImageNotFound,
+   ParserError, init offset, screen load error, save compat (can't set attribute)
+ - 官方依据: renpy/config.py error_suggestion_handlers
+ 
+ | 你说 | 它做 |
+ |------|------|
+ | "报 LabelNotFound 错" | diagnose 识别 label 未定义 |
+ | "闪退 / can't set attribute" | diagnose 识别存档不兼容 |
+ | "ScreenNotFound 报错" | diagnose 识别 screen 未定义 |

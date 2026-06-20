@@ -1,12 +1,8 @@
 ---
 name: renpy-user
-description: "写剧情、建项目、设画面、好感度/画廊。当你需要创作 Ren'Py 游戏内容时激活。"
+description: "This skill provides content creation workflows for Ren'Py games, including script generation, project scaffolding, and pre-built patterns (affection systems, galleries, CJK font config, etc.). It should be used when the user needs to write dialogue, create scenes, build a new project, or add game systems."
 compatibility: "renpy>=8.0"
-metadata:
-  openclaw:
-    emoji: ✏️
-    permissions: ["file.read", "file.write", "exec"]
-    os: ["darwin", "linux", "windows"]
+agent_created: true
 ---
 
 # Ren'Py User — 写游戏
@@ -71,3 +67,32 @@ apply("affection", {"characters": [
 ## 版本边界
 
 目标 SDK: Ren'Py ≥ 8.0。SDK 不可达时不阻塞，仅生成代码供其他环境使用。
+ 
+ ## 2026-06-21 改进记录
+ 
+ 基于 Ren'Py 8.5.3 官方 SDK 源码和文档的改进：
+ 
+ ### bridge.py
+ - 新增语句类型（基于 renpy/ast.py AST 节点）:
+   call/call_expression, jump/jump_expression, return_, pass_,
+   if_/elif_/else_, while_, init, define, default,
+   play/stop/queue (音频), pause, window_show/hide,
+   show_layer, camera, image, transform, screen, style
+ - 官方依据: renpy/ast.py (Say, Label, Jump, Call, Return, Menu, 
+   Python, If, While, Show, Scene, Hide, With, ShowLayer, Camera,
+   Pass, Define, Default, Image, Transform, Screen, Style, Init)
+ - Audio 语句依据: renpy/common/00action_audio.rpy
+ 
+ ### patterns.py
+ - 新增 `after_load_migration`: 存档兼容性迁移
+   官方依据: config.after_load_callbacks (renpy/common/00start.rpy)
+ - 新增 `layeredimage`: LayeredImage 立绘系统
+   官方依据: doc/layeredimage.html, 00layeredimage.rpy
+ 
+ | 你说 | 它做 |
+ |------|------|
+ | "存档不兼容/升级了存档坏了" | patterns 的 after_load_migration |
+ | "加个立绘切换系统/多图层角色" | patterns 的 layeredimage |
+ | "用 call 跳转子程序" | bridge 的 call() |
+ | "用 if/else 做分支" | bridge 的 if_() / else_() |
+ | "播放背景音乐" | bridge 的 play("music", ...) |
