@@ -1,4 +1,4 @@
-"""
+﻿"""
 Ren'Py SDK 版本守卫 — 轻量无依赖
 
 用法：
@@ -116,7 +116,9 @@ def check(quiet: bool = False) -> bool:
         print(f"⚠️  当前 Ren'Py SDK 版本: {'.'.join(map(str, ver))} < "
               f"最低要求 {RENPY_MIN_STR}", file=sys.stderr)
         print("   生成的 .rpy 代码使用 Ren'Py 8.x 语法（Python 3、tuple define 等），"
-              "在旧版 SDK 中可能出错。", file=sys.stderr)
+              "注意：生成的 .rpy 代码使用 Ren'Py 8.x 语法（Python 3、f-string 等），
+        在 Ren'Py 7.x 下可能因 Python 2/3 差异报错。如果使用 7.x，建议：
+        避免使用 layeredimage、after_load_callbacks 等 8.x 特性。
     return False
 
 

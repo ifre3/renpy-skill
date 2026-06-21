@@ -1,4 +1,4 @@
-"""
+﻿"""
 Ren'Py 脚本生成器 — 用 Python 链式 API 生成 .rpy 文件
 
 基于 Ren'Py 8.5.3 官方 AST (renpy/ast.py) 支持的语句类型：
@@ -337,13 +337,18 @@ class RenPyScript:
             return self.with_(with_)
         return self.line(line)
 
-    def show(self, img: str, at: Optional[str] = None, with_: Optional[str] = None) -> "RenPyScript":
+    def show(self, img: str, at: Optional[str] = None,
+             onlayer: Optional[str] = None,
+             as_name: Optional[str] = None,
+             with_: Optional[str] = None) -> "RenPyScript":
         """
         生成 show 语句（对应 AST: class Show）。
 
         Args:
             img: 图片名（可包含属性，如 "eileen happy"）
             at: 可选，transform 名称
+            onlayer: 可选，指定图层（如 "front", "overlay"）
+            as_name: 可选，别名（如 show eileen as sister）
             with_: 可选，转场效果
 
         参考：renpy/ast.py class Show
@@ -351,6 +356,38 @@ class RenPyScript:
         line = f"show {img}"
         if at:
             line += f" at {at}"
+        if onlayer:
+            line += f" onlayer {onlayer}"
+        if as_name:
+            line += f" as {as_name}"
+        self.line(line)
+        if with_:
+            return self.with_(with_)
+        return self
+
+    def show_expression(self, expr: str, at: Optional[str] = None,
+                         onlayer: Optional[str] = None,
+                         as_name: Optional[str] = None,
+                         with_: Optional[str] = None) -> "RenPyScript":
+        """
+        生成 show expression 语句。
+
+        Args:
+            expr: Python 表达式，应为图片 displayable
+            at: 可选，transform 名称
+            onlayer: 可选，显示图层
+            as_name: 可选，别名 tag
+            with_: 可选，转场效果
+
+        参考：renpy/ast.py class Show
+        """
+        line = f"show expression {expr}"
+        if at:
+            line += f" at {at}"
+        if onlayer:
+            line += f" onlayer {onlayer}"
+        if as_name:
+            line += f" as {as_name}"
         self.line(line)
         if with_:
             return self.with_(with_)
@@ -633,28 +670,42 @@ class RenPyScript:
 
     # ── 输出 ─────────────────────────────────────────
 
-    def render(self) -> str:
-        """返回生成的完整脚本字符串。"""
-        return "\n".join(self.lines)
-
-    def write(self, path: str, encoding: str = "utf-8") -> "RenPyScript":
+        def render(self) -> str:
+        """返回生成的完整脚本字符串。自动执行基本语法验证，警告存入 self.warnings。"""
+        text = "\n".join(self.lines)
+        # 自动调用 validate()，结果存入 self.warnings
+        self.warnings = []
+        validation_errors = self.validate()
+        for err in validation_errors:
+            if err not in self.warnings:
+                self.warnings.append(err)
+        return text
+def write(self, path: str, exists_ok: bool = True, encoding: str = "utf-8") -> "RenPyScript":
         """
         将生成的脚本写入 .rpy 文件（UTF-8 编码）。
 
         Args:
             path: 输出文件路径
+            exists_ok: 如果文件已存在，是否覆盖（True=覆盖+备份, False=抛异常）
             encoding: 编码（默认 utf-8，符合 Ren'Py 规范）
+
+        Raises:
+            FileExistsError: exists_ok=False 且文件已存在时
         """
         dir_name = os.path.dirname(path)
         if dir_name and not os.path.isdir(dir_name):
             os.makedirs(dir_name, exist_ok=True)
+        if os.path.exists(path):
+            if not exists_ok:
+                raise FileExistsError(f"{path} 已存在。设置 exists_ok=True 覆盖，或使用其他路径。")
+            # 备份已有文件
+            import shutil
+            bak = path + ".bak"
+            shutil.copy2(path, bak)
         with open(path, "w", encoding=encoding) as f:
             f.write(self.render())
         return self
-
-    # ── 验证 ─────────────────────────────────────────
-
-    def validate(self) -> List[str]:
+def validate(self) -> List[str]:
         """
         基本语法验证：检查常见问题。
 

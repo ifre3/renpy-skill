@@ -5,3 +5,11 @@ __pycache__/
 .env
 my.zip
 say.md
+
+# SDK 源码（过大，不上传版本控制）
+renpy-8.5.3.26051504/
+
+# 用户本地文件
+开发日志.txt
+.agents/
+.codex/

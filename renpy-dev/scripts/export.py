@@ -1,4 +1,4 @@
-"""
+﻿"""
 Ren'Py .rpy ↔ JSON 双向转换 — 版本控制 / 机器翻译 / 迁移
 支持 Unicode（中文/日文/韩文）和复杂项目结构
 
@@ -9,7 +9,8 @@ Ren'Py .rpy ↔ JSON 双向转换 — 版本控制 / 机器翻译 / 迁移
 
     # JSON → .rpy
     exporter.from_json("backup.json", output_dir="D:/projects/restored/game")
-"""
+
+注意：本工具面向对话文本提取/翻译工作流，不适合含复杂 python 块的项目完整迁移。"""
 
 import os
 import json
@@ -264,19 +265,20 @@ class Export:
         count = 0
 
         for rel, entries in data.get("files", {}).items():
-            out_path = os.path.join(output_base, rel)
-            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+            try:
+                out_path = os.path.join(output_base, rel)
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-            # 尝试读取原始 .rpy 保留框架
-            original_path = os.path.join(self.game_dir, rel)
-            if os.path.isfile(original_path):
-                with open(original_path, "r", encoding="utf-8") as fo:
-                    orig_lines = fo.readlines()
-                # 替换对话行
-                self._merge_into_original(orig_lines, entries, out_path)
-            else:
-                # 纯重建
-                self._rebuild_from_entries(entries, out_path)
+                original_path = os.path.join(self.game_dir, rel)
+                if os.path.isfile(original_path):
+                    with open(original_path, "r", encoding="utf-8") as fo:
+                        orig_lines = fo.readlines()
+                    self._merge_into_original(orig_lines, entries, out_path)
+                else:
+                    self._rebuild_from_entries(entries, out_path)
+            except Exception as e:
+                self.errors.append(f"{rel}: {e}")
+                continue
             count += 1
 
         return count

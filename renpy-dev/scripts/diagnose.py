@@ -1,4 +1,4 @@
-"""
+﻿"""
 Ren'Py 错误日志解析器 — 读取 traceback 并给出修复建议
 基于 Ren'Py 8.5.3 官方错误处理 (renpy/config.py error_suggestion_handlers,
 renpy/error.py, renpy/lint.py) 和常见错误模式
@@ -103,7 +103,22 @@ ERROR_PATTERNS = [
         "advice": "init 优先级冲突。检查 init 语句的优先级编号是否冲突 (-9999 ~ 9999)。",
         "type": "init_offset"
     },
-]
+
+    {
+        "pattern": r"RecursionError|maximum recursion depth exceeded",
+        "advice": "递归深度超限。检查 screen/ATL transform 是否形成了无限递归调用（screen 反复调用自身，或 ATL contains 循环嵌套）。",
+        "type": "recursion_error"
+    },
+    {
+        "pattern": r"line too long|line too long inside",
+        "advice": "行过长。Ren'Py 限制单行不超过 512 字符（含缩进）。长对话/选项需要手动分行，使用续行缩进或字符变量拼接。",
+        "type": "line_too_long"
+    },
+    {
+        "pattern": r"UnboundLocalError",
+        "advice": "局部变量未绑定。python 块中如果对变量赋值，该变量被视为局部变量；如需修改全局变量请用 'global var_name' 或 'store.var_name = value'。",
+        "type": "unbound_local_error"
+    },]
 class Issue:
     """诊断结果。"""
     def __init__(self, issue_type, severity, message, advice, line=None, file=None):

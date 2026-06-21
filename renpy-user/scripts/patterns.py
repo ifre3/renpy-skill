@@ -604,28 +604,30 @@ def timed_menu(items, timeout={timeout}, default={default_idx}):
 def _pattern_after_load_migration(params: dict) -> RenPyScript:
     """
     存档兼容性：版本升级后的数据迁移。
-    基于 Ren'Py 8.5.3 官方：
+    基于 Ren'Py 8.5.3 官方:
       - config.after_load_callbacks (renpy/common/00start.rpy)
       - config.before_load_callbacks
       - config.after_load_transition
     params:
       version: 当前游戏版本 (默认 "1.0")
       migrations: [(旧版本, 迁移代码), ...]
+      use_before: 是否注册 before_load_callbacks (默认 False)
     """
     version = params.get("version", "1.0")
     migrations = params.get("migrations", [])
+    use_before = params.get("use_before", False)
     script = RenPyScript()
     script.comment("Save Migration System")
-    script.comment("基于 Ren'Py 8.5.3 config.after_load_callbacks")
+    script.comment("基于 Ren'Py 8.5.3 config.after_load_callbacks / before_load_callbacks")
     script.default("save_version", '"0.0"')
     script.blank()
-    script.python(f"""
+    script.python("""
 def after_load_migration():
     current = config.version
     saved = save_version
     if saved == current:
         return
-    migrations = {repr(migrations)}
+    migrations = """ + repr(migrations) + """
     for old_ver, code in migrations:
         if saved <= old_ver and current > old_ver:
             exec(code)
@@ -633,7 +635,15 @@ def after_load_migration():
 """)
     script.blank()
     script.python("config.after_load_callbacks.append(after_load_migration)")
+    if use_before:
+        script.blank()
+        script.python("""
+def before_load_migration():
+    renpy.notify("正在升级存档...")
+""")
+        script.python("config.before_load_callbacks.append(before_load_migration)")
     script.blank()
+    script.comment("加载过渡效果")
     script.python("config.after_load_transition = dissolve")
     script.blank()
     return script
@@ -644,53 +654,193 @@ def _pattern_layeredimage(params: dict) -> RenPyScript:
     LayeredImage 立绘系统。
     基于 Ren'Py 8.5.3 官方:
       - doc/layeredimage.html
-      - renpy/common/00layeredimage.rpy
+      - renpy/common/00layeredimage_ren.py
+    支持:
+      - 多组(group)多层(attribute) + auto 模式
+      - image_format / format_function
+      - 条件层 (if_all / if_any / if_not)
+      - always 层
+      - size / at / behind
+      - group multiple 支持
+
     params:
       name: 立绘变量名 (默认 "sprite")
-      layers: [{"attribute": str, "dir": str, "default": str}, ...]
-      path: 图片基础路径 (默认 "images/sprites")
+      layers: 图层配置列表 [{...}, ...]
+      image_format: 图片路径模板 (如 "images/sprites/{image}.png")
+      size: (宽, 高) 元组 (可选)
+      at: ATL transform 列表 (可选)
+      behind: 在哪些属性之后显示 (可选)
+
+    图层条目支持:
+      {"type": "group", "attribute": "face", "dir": "face",
+       "default": "neutral", "auto": true, "multiple": false,
+       "variants": [{"attribute": "happy", "file": "happy.png"}, ...]}
+      {"type": "always", "file": "base.png"}
+      {"type": "if", "condition": "flag", "file": "special.png",
+       "if_all": ["flag1"], "if_any": ["flag2"], "if_not": ["flag3"]}
     """
-    name = params.get("name", "sprite")
-    path = params.get("path", "images/sprites")
-    layers = params.get("layers", [])
     script = RenPyScript()
-    script.comment(f"LayeredImage: {name}")
-    script.comment("基于 Ren'Py 8.5.3 layeredimage 系统")
+    name = params.get("name", "sprite")
+    size = params.get("size")
+    at_transform = params.get("at")
+    behind = params.get("behind")
+    image_format = params.get("image_format")
+    layers = params.get("layers", [])
+
     script.blank()
-    script.line(f"layeredimage {name}:")
+    script.comment("LayeredImage: " + name)
+    script.comment("基于 Ren'Py 8.5.3 00layeredimage_ren.py")
+
+    header = "layeredimage " + name
+    if at_transform:
+        if isinstance(at_transform, str):
+            header += " at " + at_transform
+        else:
+            header += " at " + " ".join(at_transform)
+    if behind:
+        if isinstance(behind, str):
+            header += " behind " + behind
+        else:
+            header += " behind " + " ".join(behind)
+    if size:
+        header += " size (" + str(size[0]) + ", " + str(size[1]) + ")"
+    script.line(header + ":")
     script._indent_level += 1
-    script.blank()
-    for layer in layers:
-        attr = layer.get("attribute", "base")
-        dir_name = layer.get("dir", attr)
-        default_attr = layer.get("default", "")
-        script.comment(f"图层: {attr}")
-        script.line(f"group {attr}:")
-        script._indent_level += 1
-        script.line(f"attribute {default_attr} default:")
-        script._indent_level += 1
-        script.line(f'"{path}/{dir_name}/{default_attr}.png"')
-        script._indent_level -= 2
+
+    if image_format:
+        script.line("image_format " + image_format)
         script.blank()
+
+    for layer in layers:
+        layer_type = layer.get("type", "group")
+
+        if layer_type == "always":
+            file = layer.get("file", "")
+            script.line("always:")
+            script._indent_level += 1
+            if layer.get("if_all"):
+                script.line("if_all " + _fmt_attrs(layer["if_all"]))
+            if layer.get("if_any"):
+                script.line("if_any " + _fmt_attrs(layer["if_any"]))
+            if layer.get("if_not"):
+                script.line("if_not " + _fmt_attrs(layer["if_not"]))
+            if layer.get("at"):
+                script.line("at " + _fmt_attrs(layer["at"]))
+            script.line('"' + file + '"')
+            script._indent_level -= 1
+            script.blank()
+
+        elif layer_type == "if":
+            condition = layer.get("condition", "True")
+            file = layer.get("file", "")
+            script.line("if " + condition + ":")
+            script._indent_level += 1
+            if layer.get("if_all"):
+                script.line("if_all " + _fmt_attrs(layer["if_all"]))
+            if layer.get("if_any"):
+                script.line("if_any " + _fmt_attrs(layer["if_any"]))
+            if layer.get("if_not"):
+                script.line("if_not " + _fmt_attrs(layer["if_not"]))
+            script.line('"' + file + '"')
+            script._indent_level -= 1
+            script.blank()
+
+        else:  # group
+            attr_name = layer.get("attribute", "base")
+            auto_mode = layer.get("auto", False)
+            multiple = layer.get("multiple", False)
+            prefix = layer.get("prefix")
+
+            if auto_mode:
+                line = "group " + attr_name + " auto"
+                if prefix:
+                    line += " prefix " + prefix
+                script.line(line + ":")
+                script._indent_level += 1
+                script._indent_level -= 1
+            else:
+                line = "group " + attr_name
+                if multiple:
+                    line += " multiple"
+                script.line(line + ":")
+                script._indent_level += 1
+
+                if layer.get("if_all"):
+                    script.line("if_all " + _fmt_attrs(layer["if_all"]))
+                if layer.get("if_any"):
+                    script.line("if_any " + _fmt_attrs(layer["if_any"]))
+                if layer.get("if_not"):
+                    script.line("if_not " + _fmt_attrs(layer["if_not"]))
+                if layer.get("at"):
+                    script.line("at " + _fmt_attrs(layer["at"]))
+
+                variants = layer.get("variants", [])
+                for v in variants:
+                    v_attr = v.get("attribute", "default")
+                    v_file = v.get("file", v_attr + ".png")
+                    v_default = v.get("default", False)
+
+                    line_v = "attribute " + v_attr
+                    if v_default:
+                        line_v += " default"
+                    script.line(line_v + ":")
+                    script._indent_level += 1
+                    if v.get("if_all"):
+                        script.line("if_all " + _fmt_attrs(v["if_all"]))
+                    if v.get("if_any"):
+                        script.line("if_any " + _fmt_attrs(v["if_any"]))
+                    if v.get("if_not"):
+                        script.line("if_not " + _fmt_attrs(v["if_not"]))
+                    if v.get("variant"):
+                        script.line("variant " + v["variant"])
+                    script.line('"' + v_file + '"')
+                    script._indent_level -= 1
+
+                script._indent_level -= 1
+            script.blank()
+
     script._indent_level -= 1
-    script.blank()
     return script
 
-
 def _pattern_fault_tolerance(params: dict) -> RenPyScript:
+    """
+    容错性配置。注意：exception_handler 会吞掉指定异常，开发调试时慎用。
+
+    基于 Ren'Py 8.5.3:
+      - config.exception_handler
+      - config.load_failed_label
+      - config.missing_label_callback / missing_image_callback
+      - config.after_load_callbacks
+
+    params:
+      use_exception_handler: 是否启用异常吞噬（默认 False，建议仅发布版本设为 True）
+      exception_types: 要吞噬的异常类型列表（默认 ["NameError","TypeError","KeyError","IndexError"]）
+    """
     script = RenPyScript()
+    use_handler = params.get("use_exception_handler", False)
+    exc_types = params.get("exception_types", ["NameError","TypeError","KeyError","IndexError"])
+
     script.comment("Fault Tolerance")
+    script.comment("config.developer = True 开启开发者模式，显示完整错误信息")
     script.define("config.developer", "True")
     script.blank()
-    script.python("""
+
+    if use_handler:
+        exc_list = ", ".join(f'"{t}"' for t in exc_types)
+        script.comment("WARNING: exception_handler 会静默吞异常，开发调试时禁用")
+        script.python("""
 def _ft_handler(exception, traceback):
-    for p in ["NameError","TypeError","KeyError","IndexError"]:
+    for p in [""" + exc_list + """]:
         if p in str(exception):
             renpy.notify("遇到小问题，已跳过。")
             return True
     return False
 config.exception_handler = _ft_handler
-config.load_failed_label = "load_failed"
+""")
+        script.blank()
+
+    script.python("""
+config.load_failed_label = "load_failed""load_failed"
 def _ft_label(n):
     return "missing_label"
 config.missing_label_callback = _ft_label

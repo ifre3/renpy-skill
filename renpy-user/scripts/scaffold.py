@@ -135,7 +135,7 @@ class Scaffold:
         ]
 
         if config.get("gui_theme"):
-            lines.append(f"define gui.init({config['resolution'][0]}, {config['resolution'][1]})")
+            lines.append(f"gui.init({config['resolution'][0]}, {config['resolution'][1]})")
             lines.append("")
 
         if config.get("font"):
@@ -285,13 +285,69 @@ label after_warp:
     return
 """
 
-    def build(self) -> list:
+    
+    def _generate_gui_rpy(self) -> str:
+        """生成 gui.rpy 骨架 — GUI 色调/字体/尺寸配置。"""
+        config = self.config
+        w, h = config["resolution"]
+        lines = [
+            "## gui.rpy — GUI 自定义配置",
+            "## Ren'Py 8.5.3 标准 GUI 骨架",
+            "",
+            f"## 窗口尺寸: {w}x{h}",
+            f"gui.init({w}, {h})",
+            "",
+            "## 颜色方案",
+            "define gui.accent_color = '#00B8C3'",
+            "define gui.idle_color = '#888888'",
+            "define gui.hover_color = '#00B8C3'",
+            "define gui.selected_color = '#FFFFFF'",
+            "define gui.insensitive_color = '#555555'",
+            "",
+            "## 文本颜色",
+            "define gui.text_color = '#FFFFFF'",
+            "define gui.interface_text_color = '#FFFFFF'",
+            "define gui.choice_button_text_color = '#FFFFFF'",
+            "",
+        ]
+
+        if config.get("font"):
+            font = config["font"]
+            lines.extend([
+                "## 字体配置",
+                f"define gui.text_font = \"{font}\"",
+                f"define gui.name_text_font = \"{font}\"",
+                f"define gui.interface_text_font = \"{font}\"",
+                f"define gui.button_text_font = \"{font}\"",
+                f"define gui.choice_button_text_font = \"{font}\"",
+                "",
+            ])
+
+        lines.extend([
+            "## 标题屏幕",
+            f"define gui.main_menu_background = \"gui/main_menu.png\"",
+            f"define gui.game_menu_background = \"gui/game_menu.png\"",
+            "",
+            "## 对话框",
+            "define gui.textbox_height = 185",
+            "define gui.name_xalign = 0.5",
+            "define gui.name_xpos = 0.5",
+            "define gui.name_ypos = -15",
+            "define gui.dialogue_xpos = 40",
+            "define gui.dialogue_ypos = 10",
+            "define gui.dialogue_width = 720",
+            "",
+        ])
+
+        return "\n".join(lines)
+def build(self) -> list:
         """生成完整项目骨架。返回生成的文件列表。"""
         self._mkdirs()
 
         files = {
             "game/options.rpy": self._generate_options_rpy(),
             "game/characters.rpy": self._generate_characters_rpy(),
+            "game/gui.rpy": self._generate_gui_rpy(),
             "game/screens.rpy": self._generate_screens_rpy(),
         }
 
@@ -299,14 +355,22 @@ label after_warp:
         if self.config.get("error_handler", True):
             files["game/error_handling.rpy"] = self._generate_fault_tolerance_rpy()
         created = []
+        overwritten = []
         for rel, content in files.items():
             path = os.path.join(self.project_dir, rel)
+            if os.path.exists(path):
+                import shutil
+                shutil.copy2(path, path + ".bak")
+                overwritten.append(rel)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(content)
             created.append(path)
 
-        # addon scripts from self.config["addons"]
-        for addon in self.config.get("addons", []):
+        if overwritten:
+            print(f"scaffold: 已备份 {len(overwritten)} 个覆盖文件 (.bak):")
+            for f in overwritten:
+                print(f"  {f}")
+for addon in self.config.get("addons", []):
             path = os.path.join(self.project_dir, "game", f"_{addon}.rpy")
             with open(path, "w", encoding="utf-8") as f:
                 f.write(f"## {addon} - 由脚手架生成\n")
