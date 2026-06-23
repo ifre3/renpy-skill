@@ -122,77 +122,37 @@ def load(path: str) -> dict:
 
 def _pattern_gallery(params: dict) -> RenPyScript:
     """
-    图片画廊系统。
+    图片画廊系统（基于官方 Gallery 类）。
     params:
-      images: [(unlock_var, image_name, display_name), ...]
+      images: [(image_name, display_name), ...]
       cols: 列数 (默认 3)
-      rows: 行数 (默认 2)
       screen_name: 屏幕名称 (默认 "gallery")
     """
     script = RenPyScript()
     images = params.get("images", [])
     cols = params.get("cols", 3)
-    rows = params.get("rows", 2)
     screen_name = params.get("screen_name", "gallery")
-    per_page = cols * rows
-    pages = max(1, -(-len(images) // per_page))  # ceil division
 
     script.comment(f"Gallery: {screen_name}")
-    script.default(f"{screen_name}_unlocked", "[]")
-    script.default(f"{screen_name}_page", "0")
+    script.comment("基于 Ren'Py 8.5.3 00gallery.rpy Gallery 类")
+    script.raw(f"define {screen_name}_g = Gallery()")
+    script.raw(f"{screen_name}_g.transition = dissolve")
+    script.blank()
 
-    # unlock 函数
-    script.python(f"""
-def {screen_name}_unlock(var_name):
-    unlocked = globals().get("{screen_name}_unlocked", [])
-    if var_name not in unlocked:
-        unlocked.append(var_name)
-        globals()["{screen_name}_unlocked"] = unlocked
-        renpy.notify("解锁了新图片！")
+    for img_name, display_name in images:
+        script.raw(f'{screen_name}_g.button("{img_name}")')
+        script.raw(f'{screen_name}_g.image("{img_name}")')
+        script.raw(f'{screen_name}_g.unlock("{img_name}")')
+        script.blank()
 
-def {screen_name}_is_unlocked(var_name):
-    return var_name in globals().get("{screen_name}_unlocked", [])
-""")
-
-    # unlock all (for debug)
-    script.label(f"{screen_name}_unlock_all")
-    script.python(f"{screen_name}_unlocked = [{', '.join(f'\"{img[0]}\"' for img in images)}]")
-    script.return_()
-    script._raw('# end label')
-
-    # screen
-    script.comment(f"{screen_name} screen 定义")
-    asm = f"""
-screen {screen_name}():
-    tag menu
-    use game_menu(_("{screen_name}"), scroll="viewport"):
-        vbox:
-            spacing 10
-            grid {cols} {rows}:
-                spacing 5
-                xalign 0.5
-                for i in range({per_page}):
-                    $ idx = {screen_name}_page * {per_page} + i
-                    if idx < len({screen_name}_unlocked):
-                        $ img_name = {screen_name}_unlocked[idx]
-                        imagebutton:
-                            idle img_name
-                            action NullAction()
-                            xsize 200 ysize 160
-                    else:
-                        frame:
-                            xsize 200 ysize 160
-                            text "?" xalign 0.5 yalign 0.5
-            hbox:
-                xalign 0.5
-                spacing 20
-                if {screen_name}_page > 0:
-                    textbutton "◀ 上一页" action SetVariable("{screen_name}_page", {screen_name}_page - 1)
-                if {screen_name}_page < {pages - 1}:
-                    textbutton "下一页 ▶" action SetVariable("{screen_name}_page", {screen_name}_page + 1)
-"""
-    script.screen(screen_name, textwrap.dedent(asm).strip())
-
+    script.raw(f"screen {screen_name}():")
+    script.raw("    tag menu")
+    script.raw(f'    use game_menu(_("{screen_name}"), scroll="viewport"):')
+    script.raw("        grid {} 1:".format(cols))
+    script.raw("            spacing 5")
+    for img_name, display_name in images:
+        script.raw(f'            {screen_name}_g.make_button("{img_name}", "{img_name}", locked="locked.png")')
+    script.blank()
     return script
 
 
@@ -246,7 +206,7 @@ def _pattern_cjk_font(params: dict) -> RenPyScript:
         defines.insert(1, f'gui.bold_font = "{bold}"')
 
     for line in defines:
-        script._raw(line)
+        script.raw(line)
 
     script.blank()
 
@@ -269,34 +229,33 @@ def _pattern_splash(params: dict) -> RenPyScript:
       fade_in: 淡入时间 (默认 1.0)
       hold: 停留时间 (默认 2.0)
       fade_out: 淡出时间 (默认 1.0)
-      skip_key: 跳过键 (默认 "space")
     """
     logo = params.get("logo", "logo")
     bg = params.get("bg_color", "#000")
     fi = params.get("fade_in", 1.0)
     hold = params.get("hold", 2.0)
     fo = params.get("fade_out", 1.0)
-    skip = params.get("skip_key", "space")
 
     script = RenPyScript()
     script.comment("Splashscreen")
-    script.define("config.splashscreen_skip_label", '"splash_done"', )
+    script.comment("基于 Ren'Py 8.5.3 00start.rpy: config.end_splash_transition, splashscreen_suppress_overlay")
+    script.define("config.splashscreen_suppress_overlay", "True")
     script.blank()
     script.label("splashscreen")
-    script._raw('scene')
-    script.python(f"renpy.music.set_volume(0.0)")
-    script._raw('scene')
-    script._raw(f'show solid Solid({bg})')
-    script.with_("None")
-    script.pause(0.5)
-    script._raw(f"show {logo} at True alpha 0.0")
-    script.with_("None")
-    script._raw(f"show {logo} at True alpha 1.0")
-    script.with_(f"Dissolve({fi})")
+    script.raw("scene")
+    script.raw(f"show solid Solid({bg})")
+    script.with_stmt("None")
+    script.raw(f"show {logo}:")
+    script.raw("    alpha 0.0")
+    script.raw(f"    linear {fi} alpha 1.0")
+    script.with_stmt("None")
     script.pause(hold)
-    script._raw(f"show {logo} at True alpha 0.0")
-    script.with_(f"Dissolve({fo})")
-    script.label("splash_done")
+    script.raw(f"show {logo}:")
+    script.raw("    alpha 1.0")
+    script.raw(f"    linear {fo} alpha 0.0")
+    script.with_stmt("None")
+    script.raw("scene")
+    script.define("config.end_splash_transition", "fade")
     script.return_()
     return script
 
@@ -307,14 +266,13 @@ def _pattern_nvl_mode(params: dict) -> RenPyScript:
     """
     script = RenPyScript()
     script.comment("NVL Mode Configuration")
-    script._raw("define gui.nvl_height = 115")
-    script._raw("define gui.nvl_spacing = 15")
-    script._raw("define gui.nvl_thought_height = 115")
-    script._raw("define gui.nvl_thought_spacing = 15")
-    script._raw("")
-    script._raw("define config.nvl_list_length = 6")
-    script._raw("define config.nvl_choice_layer = \"overlay\"")
-    script._raw("define config.nvl_layer = \"master\"")
+    script.raw("define gui.nvl_height = 115")
+    script.raw("define gui.nvl_spacing = 15")
+    script.raw("define gui.nvl_thought_height = 115")
+    script.raw("define gui.nvl_thought_spacing = 15")
+    script.raw("")
+    script.raw("define config.nvl_list_length = None")
+    script.raw("define config.nvl_layer = \"screens\"")
     script.blank()
     return script
 
@@ -322,19 +280,13 @@ def _pattern_nvl_mode(params: dict) -> RenPyScript:
 def _pattern_save_load(params: dict) -> RenPyScript:
     """存档/读档界面增强
     params:
-      slots: 存档栏位数 (默认 12)
       auto_slots: 自动存档数 (默认 6)
     """
-    slots = params.get("slots", 12)
     auto = params.get("auto_slots", 6)
     script = RenPyScript()
     script.comment("Save/Load Configuration")
-    script._raw(f"define config.save_slots = {slots + auto}")
-    script._raw(f"define config.has_autosave = True")
-    script._raw(f"define config.autosave_slots = {auto}")
-    script._raw(f"define config.auto_save_delay = {params.get('auto_delay', 300)}")
-    script._raw(f"define config.auto_save_on_choice = True")
-    script._raw(f"define config.auto_save_on_quit = True")
+    script.raw(f"define config.has_autosave = True")
+    script.raw(f"define config.autosave_slots = {auto}")
     script.blank()
     return script
 
@@ -394,9 +346,9 @@ def _pattern_credit_roll(params: dict) -> RenPyScript:
     script = RenPyScript()
     script.comment("Credits Roll")
     script.label("credits")
-    script._raw('scene')
-    script._raw(f'show solid Solid({bg})')
-    script.with_("None")
+    script.raw('scene')
+    script.raw(f'show solid Solid({bg})')
+    script.with_stmt("None")
 
     # 构建滚动内容（JSON 序列化防注入）
     import json as _json
@@ -425,7 +377,7 @@ ui.add(
 )
 renpy.pause({speed}, hard=True)
 """)
-    script.with_("fade")
+    script.with_stmt("fade")
     script.return_()
     return script
 
@@ -485,13 +437,13 @@ def bg_with_time(bg_name):
     script.blank()
 
     # show_time screen — 在左上角显示当前时间
-    script._raw("screen show_time():")
-    script._raw("    if game_time == \"day\":")
-    script._raw("        text \"☀️ 白天\" xalign 0.0 yalign 0.0 color \"#FFD700\" size 20")
-    script._raw("    elif game_time == \"evening\":")
-    script._raw("        text \"🌅 傍晚\" xalign 0.0 yalign 0.0 color \"#FF8C00\" size 20")
-    script._raw("    else:")
-    script._raw("        text \"🌙 夜晚\" xalign 0.0 yalign 0.0 color \"#87CEEB\" size 20")
+    script.raw("screen show_time():")
+    script.raw("    if game_time == \"day\":")
+    script.raw("        text \"☀️ 白天\" xalign 0.0 yalign 0.0 color \"#FFD700\" size 20")
+    script.raw("    elif game_time == \"evening\":")
+    script.raw("        text \"🌅 傍晚\" xalign 0.0 yalign 0.0 color \"#FF8C00\" size 20")
+    script.raw("    else:")
+    script.raw("        text \"🌙 夜晚\" xalign 0.0 yalign 0.0 color \"#87CEEB\" size 20")
     script.blank()
     return script
 
@@ -548,16 +500,16 @@ def get_tier_name(tier):
     if show_screen and chars:
         script.blank()
         script.comment("Affection Status Screen")
-        script._raw("screen affection_status():")
-        script._raw("    vbox:")
-        script._raw("        style_prefix \"pref\"")
-        script._raw("        xalign 0.5 yalign 0.5")
+        script.raw("screen affection_status():")
+        script.raw("    vbox:")
+        script.raw("        style_prefix \"pref\"")
+        script.raw("        xalign 0.5 yalign 0.5")
         for ch in chars:
             v = ch["var"]
             display = ch.get("name", v)
-            script._raw(f"        label \"{display}: [get_tier_name({v}_affection_tier)]\"")
-            script._raw(f"        bar value AnimatedValue(value={v}_affection, range={v}_affection_max) xmaximum 400")
-            script._raw(f"        null height 10")
+            script.raw(f"        label \"{display}: [get_tier_name({v}_affection_tier)]\"")
+            script.raw(f"        bar value AnimatedValue(value={v}_affection, range={v}_affection_max) xmaximum 400")
+            script.raw(f"        null height 10")
 
     script.blank()
     return script
@@ -636,7 +588,9 @@ def after_load_migration():
     migrations = """ + repr(migrations) + """
     for old_ver, code in migrations:
         if saved <= old_ver and current > old_ver:
-            exec(code)
+            # 安全执行迁移代码（仅限可信来源）
+            renpy.log("Running migration: " + old_ver)
+            exec(code, {"__builtins__": __builtins__}, globals())
     renpy.set_variable("save_version", current)
 """)
     script.blank()
@@ -650,7 +604,7 @@ def before_load_migration():
         script.python("config.before_load_callbacks.append(before_load_migration)")
     script.blank()
     script.comment("加载过渡效果")
-    script.python("config.after_load_transition = dissolve")
+    script.raw("define config.after_load_transition = dissolve")
     script.blank()
     return script
 
@@ -846,7 +800,7 @@ config.exception_handler = _ft_handler
         script.blank()
 
     script.python("""
-config.load_failed_label = "load_failed""load_failed"
+config.load_failed_label = "load_failed"
 def _ft_label(n):
     return "missing_label"
 config.missing_label_callback = _ft_label
@@ -913,26 +867,26 @@ def phone_clear():
     script.blank()
 
     # 手机界面
-    script._raw("screen phone_ui():")
-    script._raw("    zorder 100")
-    script._raw("    if phone_visible:")
-    script._raw("        frame:")
-    script._raw("            xalign 0.95 yalign 0.5")
-    script._raw("            xsize 320 ysize 500")
-    script._raw("            background Frame(\"gui/phone_bg.png\")")
-    script._raw("            viewport:")
-    script._raw("                ysize 420")
-    script._raw("                scrollbars \"vertical\"")
-    script._raw("                mousewheel True")
-    script._raw("                vbox:")
-    script._raw("                    for msg in phone_messages:")
-    script._raw("                        if msg.incoming:")
-    script._raw('                            text "[msg.sender]" color "#888" size 14')
-    script._raw('                            text "[msg.text]" color "#fff" size 16')
-    script._raw("                        else:")
-    script._raw('                            text "[msg.text]" color "#0f0" size 16 xalign 1.0')
-    script._raw("                        null height 8")
-    script._raw("            textbutton \"关闭\" action SetVariable(\"phone_visible\", False) xalign 0.5")
+    script.raw("screen phone_ui():")
+    script.raw("    zorder 100")
+    script.raw("    if phone_visible:")
+    script.raw("        frame:")
+    script.raw("            xalign 0.95 yalign 0.5")
+    script.raw("            xsize 320 ysize 500")
+    script.raw("            background Frame(\"gui/phone_bg.png\")")
+    script.raw("            viewport:")
+    script.raw("                ysize 420")
+    script.raw("                scrollbars \"vertical\"")
+    script.raw("                mousewheel True")
+    script.raw("                vbox:")
+    script.raw("                    for msg in phone_messages:")
+    script.raw("                        if msg.incoming:")
+    script.raw('                            text "[msg.sender]" color "#888" size 14')
+    script.raw('                            text "[msg.text]" color "#fff" size 16')
+    script.raw("                        else:")
+    script.raw('                            text "[msg.text]" color "#0f0" size 16 xalign 1.0')
+    script.raw("                        null height 8")
+    script.raw("            textbutton \"关闭\" action SetVariable(\"phone_visible\", False) xalign 0.5")
     script.blank()
     return script
 
@@ -989,61 +943,61 @@ def inv_has(item_id, count=1):
 
     script.blank()
     # 背包界面
-    script._raw("screen inventory_ui():")
-    script._raw("    frame:")
-    script._raw("        xalign 0.5 yalign 0.5")
-    script._raw(f"        grid 4 {max(1, slots // 4)}:")
-    script._raw("            spacing 5")
-    script._raw("            for i in range(inv_slots):")
-    script._raw("                if i < len(inv_items):")
-    script._raw("                    $ it = inv_items[i]")
-    script._raw("                    imagebutton:")
-    script._raw("                        idle \"item_placeholder\"")
-    script._raw("                        action NullAction()")
-    script._raw("                        tooltip eval(f\"item_{it['id']}_desc\")")
-    script._raw("                else:")
-    script._raw("                    frame:")
-    script._raw("                        xsize 80 ysize 80")
-    script._raw('                        text "-" xalign 0.5 yalign 0.5')
+    script.raw("screen inventory_ui():")
+    script.raw("    frame:")
+    script.raw("        xalign 0.5 yalign 0.5")
+    script.raw(f"        grid 4 {max(1, slots // 4)}:")
+    script.raw("            spacing 5")
+    script.raw("            for i in range(inv_slots):")
+    script.raw("                if i < len(inv_items):")
+    script.raw("                    $ it = inv_items[i]")
+    script.raw("                    imagebutton:")
+    script.raw("                        idle \"item_placeholder\"")
+    script.raw("                        action NullAction()")
+    script.raw("                        tooltip eval(f\"item_{it['id']}_desc\")")
+    script.raw("                else:")
+    script.raw("                    frame:")
+    script.raw("                        xsize 80 ysize 80")
+    script.raw('                        text "-" xalign 0.5 yalign 0.5')
     script.blank()
     return script
 
 
 def _pattern_music_room(params: dict) -> RenPyScript:
     """
-    音乐室系统。
+    音乐室系统（基于官方 MusicRoom 类）。
     params:
-      tracks: [{"file": "bgm_01.ogg", "title": "主题曲", "unlock": "persistent.unlocked_01"}, ...]
+      tracks: [{"file": "bgm_01.ogg", "title": "主题曲", "always_unlocked": false}, ...]
       screen_name: 屏幕名 (默认 "music_room")
     """
     tracks = params.get("tracks", [])
     screen_name = params.get("screen_name", "music_room")
     script = RenPyScript()
     script.comment("Music Room")
-    script._raw(f"define {screen_name} = MusicRoom(fadeout=1.0)")
+    script.comment("基于 Ren'Py 8.5.3 00musicroom.rpy MusicRoom 类")
+    script.raw(f"define {screen_name} = MusicRoom(fadeout=1.0)")
     script.blank()
 
-    # 注册曲目
-    for i, track in enumerate(tracks):
-        unlock = track.get("unlock", "True")
-        script._raw(f'{screen_name}.add("{track["file"]}", always_unlocked={unlock})')
-        if i % 5 == 0:
-            script.blank()
+    for track in tracks:
+        file = track["file"]
+        always_unlocked = track.get("always_unlocked", False)
+        script.raw(f'{screen_name}.add("{file}", always_unlocked={always_unlocked})')
 
     script.blank()
-    # 音乐室界面
-    script._raw(f"screen {screen_name}():")
-    script._raw("    tag menu")
-    script._raw('    use game_menu(_("音乐室"), scroll="viewport"):')
-    script._raw("        vbox:")
-    script._raw("            spacing 8")
+    script.raw(f"screen {screen_name}():")
+    script.raw("    tag menu")
+    script.raw(f'    use game_menu(_("音乐室"), scroll="viewport"):')
+    script.raw("        vbox:")
+    script.raw("            spacing 8")
     for track in tracks:
         title = track.get("title", track["file"])
-        script._raw(f'            textbutton _("{title}") action {screen_name}.Play("{track["file"]}")')
-    script._raw("            null height 20")
-    script._raw(f'            textbutton _("停止") action {screen_name}.Stop()')
-    script._raw(f'            textbutton _("下一首") action {screen_name}.Next()')
-    script._raw(f'            textbutton _("上一首") action {screen_name}.Previous()')
+        file = track["file"]
+        script.raw(f'            textbutton _("{title}") action {screen_name}.Play("{file}")')
+    script.raw("            null height 20")
+    script.raw(f'            textbutton _("停止") action {screen_name}.Stop()')
+    script.raw(f'            textbutton _("下一首") action {screen_name}.Next()')
+    script.raw(f'            textbutton _("上一首") action {screen_name}.Previous()')
+    script.raw(f'            textbutton _("随机") action {screen_name}.RandomPlay()')
     script.blank()
     return script
 

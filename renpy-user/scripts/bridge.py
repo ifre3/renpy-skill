@@ -450,6 +450,10 @@ class RenPyScript:
         """
         return self.line(f"with {transition}")
 
+    def with_stmt(self, transition: str) -> "RenPyScript":
+        """with_ 的公开别名（避免与 Python 关键字 with 冲突的命名）。"""
+        return self.with_(transition)
+
     # ── Python 块 ────────────────────────────────────
 
     def python(self, code: str = "", hide: bool = False) -> "RenPyScript":
@@ -635,6 +639,10 @@ class RenPyScript:
         """添加一行不加缩进的代码（旧 patterns 兼容）。"""
         self.lines.append(code)
         return self
+
+    def raw(self, code: str) -> "RenPyScript":
+        """_raw 的公开别名。"""
+        return self._raw(code)
 
     def screen(self, name: str, tag: Optional[str] = None) -> BlockScope:
         """

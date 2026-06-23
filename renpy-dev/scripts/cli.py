@@ -252,7 +252,7 @@ class RenPyCLI:
         if testcase:
             cmd.append(testcase)
         if enable_all:
-            cmd.append("--enable_all")
+            cmd.append("--enable-all")
         if report_detailed:
             cmd.append("--report-detailed")
         if hide_execution:
@@ -262,16 +262,15 @@ class RenPyCLI:
     # ── Distribution ────────────────────────────────────
 
     def distribute(self, project_dir: str, destination: Optional[str] = None,
-                   formats: Optional[List[str]] = None,
+                   formats: Optional[str] = None,
                    no_archive: bool = False,
                    package: Optional[List[str]] = None) -> CLIResult:
         """Package project for distribution."""
-        cmd = [project_dir, "launcher", "distribute"]
+        cmd = [project_dir, "distribute"]
         if destination:
             cmd += ["--destination", destination]
         if formats:
-            for f in formats:
-                cmd += ["--format", f]
+            cmd += ["--format", formats]
         if no_archive:
             cmd.append("--no-archive")
         if package:
@@ -284,9 +283,9 @@ class RenPyCLI:
     def android_build(self, project_dir: str, destination: Optional[str] = None,
                       bundle: bool = False, install: bool = False,
                       launch: bool = False,
-                      package: Optional[str] = None) -> CLIResult:
+                      package: Optional[List[str]] = None) -> CLIResult:
         """Build Android APK/AAB."""
-        cmd = [project_dir, "launcher", "android_build"]
+        cmd = [project_dir, "android_build"]
         if destination:
             cmd += ["--destination", destination]
         if bundle:
@@ -296,21 +295,22 @@ class RenPyCLI:
         if launch:
             cmd.append("--launch")
         if package:
-            cmd += ["--package", package]
+            for p in package:
+                cmd += ["--package", p]
         return self._run(cmd)
 
     def ios_create(self, project_dir: str, destination: str) -> CLIResult:
         """Create iOS Xcode project."""
-        return self._run([project_dir, "launcher", "ios_create", destination])
+        return self._run([project_dir, "ios_create", destination])
 
     def ios_populate(self, project_dir: str, destination: str) -> CLIResult:
         """Populate iOS Xcode project with game data."""
-        return self._run([project_dir, "launcher", "ios_populate", destination])
+        return self._run([project_dir, "ios_populate", destination])
 
     def web_build(self, project_dir: str, destination: Optional[str] = None,
                   launch_after: bool = False) -> CLIResult:
         """Build project for web."""
-        cmd = [project_dir, "launcher", "web_build"]
+        cmd = [project_dir, "web_build"]
         if destination:
             cmd += ["--destination", destination]
         if launch_after:
@@ -363,11 +363,14 @@ class RenPyCLI:
             cmd.append("--replace")
         return self._run(cmd)
 
-    def extract_strings(self, project_dir: str, output: Optional[str] = None) -> CLIResult:
+    def extract_strings(self, project_dir: str, language: str, destination: str,
+                        merge: bool = False, force: bool = False) -> CLIResult:
         """Extract translatable strings."""
-        cmd = [project_dir, "translate", "extract"]
-        if output:
-            cmd += ["--output", output]
+        cmd = [project_dir, "extract_strings", language, destination]
+        if merge:
+            cmd.append("--merge")
+        if force:
+            cmd.append("--force")
         return self._run(cmd)
 
     # ── JSON Dump (renpy/arguments.py --json-dump suite) ─
@@ -391,7 +394,7 @@ class RenPyCLI:
                      replace_images: bool = False, replace_code: bool = False,
                      update_code: bool = False, minimal: bool = False) -> CLIResult:
         """Generate GUI theme."""
-        cmd = [project_dir, "launcher", "generate_gui"]
+        cmd = [project_dir, "generate_gui"]
         cmd += ["--width", str(width), "--height", str(height), "--accent", accent]
         if light:
             cmd.append("--light")
@@ -407,7 +410,7 @@ class RenPyCLI:
 
     def gui_images(self, project_dir: str) -> CLIResult:
         """Regenerate GUI images."""
-        return self._run([project_dir, "launcher", "gui_images"])
+        return self._run([project_dir, "gui_images"])
 
     # ── Developer Tools ─────────────────────────────────
 
@@ -433,11 +436,15 @@ class RenPyCLI:
 
     def set_project(self, project_dir: str, project: str) -> CLIResult:
         """Register a project in the launcher."""
-        return self._run([project_dir, "launcher", "set_project", project])
+        return self._run([project_dir, "set_project", project])
+
+    def set_projects_directory(self, path: str) -> CLIResult:
+        """Set the projects directory path."""
+        return self._run([self.sdk_path, "set_projects_directory", path])
 
     def get_projects_directory(self) -> CLIResult:
         """Get the projects directory path."""
-        return self._run(["launcher", "get_projects_directory"])
+        return self._run([self.sdk_path, "get_projects_directory"])
 
     def add_from(self, project_dir: str) -> CLIResult:
         """Add .rpy files from directories."""
@@ -445,7 +452,7 @@ class RenPyCLI:
 
     def update_old_game(self, project_dir: str) -> CLIResult:
         """Update old game format."""
-        return self._run([project_dir, "launcher", "update_old_game"])
+        return self._run([project_dir, "update_old_game"])
 
     @staticmethod
     def format_result(result: CLIResult) -> str:
@@ -568,7 +575,8 @@ def main():
         "translate", "dialogue", "merge_strings", "extract_strings",
         "android_build", "web_build", "ios_create", "ios_populate",
         "generate_gui", "gui_images", "director", "rmpersistent",
-        "update", "add_from", "set_project", "get_projects_directory",
+        "update", "add_from", "set_project", "set_projects_directory",
+        "get_projects_directory",
         "update_old_game", "json_dump",
     ], help="Command to execute")
     parser.add_argument("--sdk", default=None, help="Path to Ren'Py SDK")

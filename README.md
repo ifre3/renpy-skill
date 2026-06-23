@@ -9,7 +9,7 @@
 | 技能 | 用途 | 核心能力 |
 |------|------|---------|
 | `renpy-dev` | 工程工具链 | CLI 封装、语法检查、项目分析、错误诊断、导出迁移、自动化测试 |
-| `renpy-user` | 内容创作 | 脚本生成（28 种语句）、预制模式（15 种）、项目脚手架 |
+| `renpy-user` | 内容创作 | 脚本生成（28 种语句）、预制模式（16 种）、项目脚手架 |
 
 ### renpy-dev —— 工程工具链
 
@@ -26,7 +26,7 @@
 基于 Ren'Py 8.5.3 官方 AST（renpy/ast.py）和内置模式库：
 
 - **脚本生成**：28 种 Ren'Py 语句，含 call / jump / if / while / define / default / play / pause 等
-- **预制模式**：15 种开箱即用功能模块（含手机/背包/音乐室等社区高频需求）
+- **预制模式**：16 种开箱即用功能模块（含手机/背包/音乐室等社区高频需求）
 - **项目脚手架**：从零生成完整项目骨架，内置容错性配置
 
 ## 快速开始
@@ -74,6 +74,17 @@ s.write('game/script.rpy')
 | `music_room` | 音乐室（解锁 BGM 播放） |
 
 ## 更新日志
+
+### v0.3.2 — 2026-06-24
+
+**基于 Ren'Py 8.5.3 官方源码深度校对修复**
+
+本次发布基于 `renpy/ast.py`、`renpy/arguments.py`、`renpy/common/` 官方源码逐项比对，修正了 skill 代码与官方实现不一致之处。
+
+- **cli.py**：移除 10 个命令中错误的 `launcher` 前缀（官方 CLI 无此前缀，导致 "Command launcher is unknown"）；修正 `extract_strings` 调用签名为 `["extract_strings", language, destination]`；修正 `--enable_all` → `--enable-all`；修正 `android_build` 包类型与 `distribute` formats 类型；新增 `set_projects_directory` 命令
+- **diagnose.py**：修正 `ParserError` → `ParseError`（官方类名见 renpy/lexer.py:49）；删除 3 个虚构错误模式（`Loading screen.*failed`、`line too long`、`init offset`）；收窄 `Exception` 模式为 `^Exception:`；新增 `ImportError`/`UnpicklingError`/`ValueError` 模式；analyze() 增加 break 防止重复匹配
+- **patterns.py**：`save_load` 删除 4 个虚构 config 变量；`splash` 修正 ATL 语法错误并改用官方 `config.splashscreen_suppress_overlay` / `config.end_splash_transition`；`nvl_mode` 修正 `config.nvl_layer` 为 `screens`、`config.nvl_list_length` 为 `None`；`fault_tolerance` 修正字符串拼接 bug；`gallery` 改用官方 `Gallery` 类；`music_room` 修正 `always_unlocked` 语义并新增 `RandomPlay()`；`after_load_migration` 修正 `exec(code)` 安全问题
+- **bridge.py**：新增 `raw()` / `with_stmt()` 公开别名，与 patterns.py 调用约定对齐
 
 ### v0.3.0 — 2026-06-24
 

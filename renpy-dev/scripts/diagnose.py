@@ -49,8 +49,8 @@ ERROR_PATTERNS = [
         "type": "indentation_error"
     },
     {
-        "pattern": r"ParserError",
-        "advice": "脚本解析错误。检查最近的 .rpy 文件是否有未闭合的 block (label/screen/if 等)。",
+        "pattern": r"ParseError",
+        "advice": "脚本解析错误。常见原因：未闭合的括号/引号、缩进不匹配、未终止的字符串字面量。",
         "type": "parser_error"
     },
     {
@@ -69,7 +69,7 @@ ERROR_PATTERNS = [
         "type": "file_not_found"
     },
     {
-        "pattern": r"Exception",
+        "pattern": r"^Exception:",
         "advice": "未捕获异常。检查 Python 语法和 Ren'Py 语句格式。",
         "type": "exception"
     },
@@ -93,16 +93,6 @@ ERROR_PATTERNS = [
         "advice": "Ren'Py 脚本错误。检查 init 优先级、变量重复定义等。",
         "type": "script_error"
     },
-    {
-        "pattern": r"Loading screen.*failed",
-        "advice": "screen 加载失败。检查 screen 定义中的语法和引用的变量/图片是否存在。",
-        "type": "screen_load_error"
-    },
-    {
-        "pattern": r"init offset",
-        "advice": "init 优先级冲突。检查 init 语句的优先级编号是否冲突 (-9999 ~ 9999)。",
-        "type": "init_offset"
-    },
 
     {
         "pattern": r"RecursionError|maximum recursion depth exceeded",
@@ -110,14 +100,24 @@ ERROR_PATTERNS = [
         "type": "recursion_error"
     },
     {
-        "pattern": r"line too long|line too long inside",
-        "advice": "行过长。Ren'Py 限制单行不超过 512 字符（含缩进）。长对话/选项需要手动分行，使用续行缩进或字符变量拼接。",
-        "type": "line_too_long"
-    },
-    {
         "pattern": r"UnboundLocalError",
         "advice": "局部变量未绑定。python 块中如果对变量赋值，该变量被视为局部变量；如需修改全局变量请用 'global var_name' 或 'store.var_name = value'。",
         "type": "unbound_local_error"
+    },
+    {
+        "pattern": r"ImportError|ModuleNotFoundError",
+        "advice": "模块导入失败。检查 Python 模块路径是否正确，或模块是否已安装。",
+        "type": "import_error"
+    },
+    {
+        "pattern": r"UnpicklingError|pickle",
+        "advice": "存档文件损坏或版本不兼容。存档可能由不同版本的 Ren'Py 或 Python 创建，建议删除旧存档。",
+        "type": "unpickling_error"
+    },
+    {
+        "pattern": r"ValueError",
+        "advice": "值错误。检查变量值是否在有效范围内，如颜色值、数值参数等。",
+        "type": "value_error"
     },]
 class Issue:
     """诊断结果。"""
@@ -174,6 +174,7 @@ class Diagnoser:
                         line=i,
                         file=os.path.basename(self.log_path) if self.log_path else None,
                     ))
+                    break
         if not self.issues:
             self.issues.append(Issue(
                 "unknown", "INFO",
