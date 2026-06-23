@@ -77,7 +77,6 @@ class RenPyCLI:
         self.errors_in_editor = errors_in_editor
 
     @staticmethod
-        @staticmethod
     def _detect_sdk() -> str:
         """Detect Ren'Py SDK path. 结果缓存在 _sdk_cache 中，避免重复遍历目录。"""
         if RenPyCLI._sdk_cache is not None:
@@ -114,7 +113,7 @@ class RenPyCLI:
             "Ren'Py SDK not found. Set RENPY_SDK environment variable "
             "or pass sdk_path= to the constructor."
         )
-def _find_python() -> str:
+    def _find_python(self) -> str:
         """Find the Python executable bundled with the Ren'Py SDK."""
         sdk = RenPyCLI._detect_sdk()
         lib = os.path.join(sdk, "lib")

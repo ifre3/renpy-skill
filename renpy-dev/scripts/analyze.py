@@ -1,4 +1,4 @@
-﻿"""
+"""
 Ren'"'"'Py Project Structure Scanner — lightweight regex-based scanner.
 
 LIMITATIONS:
@@ -194,7 +194,7 @@ class Analyzer:
     def report(self, verbose: bool = False) -> str:
         """Generate a human-readable analysis report."""
         lines = []
-        lines.append(f"[Ren'"'"'Py Project Scan] {self.project_dir}")
+        lines.append(f"[Ren'Py Project Scan] {self.project_dir}")
         lines.append("=" * 50)
         lines.append("")
 
@@ -244,7 +244,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Ren'"'"'Py project structure scanner (regex-based)"
+        description="Ren'Py project structure scanner (regex-based)"
     )
     parser.add_argument("project_dir", help="Project directory")
     parser.add_argument(

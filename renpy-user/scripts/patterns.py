@@ -13,6 +13,9 @@ AI 只需调  pattern = apply("gallery", {...}) 即可。
   - preferences: 设置界面扩展（文字速度/音量/全屏）
   - credit_roll: 制作人员名单滚动
   - day_night:  早晚切换系统（背景 + BGM）
+  - phone:      手机短信系统（收发消息/通知）
+  - inventory:  背包道具系统（物品/使用/组合）
+  - music_room: 音乐室（解锁 BGM 播放）
 """
 
 import os
@@ -60,6 +63,9 @@ def apply(name: str, params: dict = None, validate: bool = True) -> RenPyScript:
         "after_load_migration": _pattern_after_load_migration,
        "layeredimage": _pattern_layeredimage,
         "fault_tolerance": _pattern_fault_tolerance,
+        "phone": _pattern_phone,
+        "inventory": _pattern_inventory,
+        "music_room": _pattern_music_room,
    }
     if name not in registry:
         available = ', '.join(registry.keys())
@@ -870,6 +876,178 @@ config.after_load_callbacks.append(_ft_load)
     script.blank()
     return script
 
+
+# ── 社区高频需求：手机/背包/音乐室 ─────────────────────
+
+def _pattern_phone(params: dict) -> RenPyScript:
+    """
+    手机短信系统。
+    params:
+      contacts: [{"name": "艾琳", "avatar": "eileen_icon"}, ...]
+      style: "smart" | "flip" (默认 "smart")
+    """
+    contacts = params.get("contacts", [])
+    style = params.get("style", "smart")
+    script = RenPyScript()
+    script.comment("Phone Messaging System")
+    script.default("phone_messages", "[]")
+    script.default("phone_visible", "False")
+    script.blank()
+
+    script.python("""
+class PhoneMessage:
+    def __init__(self, sender, text, incoming=True):
+        self.sender = sender
+        self.text = text
+        self.incoming = incoming
+        self.time = renpy.time.time()
+
+def phone_send(sender, text, incoming=True):
+    phone_messages.append(PhoneMessage(sender, text, incoming))
+    if incoming:
+        renpy.notify(f"{sender}: {text[:20]}")
+
+def phone_clear():
+    phone_messages[:] = []
+""")
+    script.blank()
+
+    # 手机界面
+    script._raw("screen phone_ui():")
+    script._raw("    zorder 100")
+    script._raw("    if phone_visible:")
+    script._raw("        frame:")
+    script._raw("            xalign 0.95 yalign 0.5")
+    script._raw("            xsize 320 ysize 500")
+    script._raw("            background Frame(\"gui/phone_bg.png\")")
+    script._raw("            viewport:")
+    script._raw("                ysize 420")
+    script._raw("                scrollbars \"vertical\"")
+    script._raw("                mousewheel True")
+    script._raw("                vbox:")
+    script._raw("                    for msg in phone_messages:")
+    script._raw("                        if msg.incoming:")
+    script._raw('                            text "[msg.sender]" color "#888" size 14')
+    script._raw('                            text "[msg.text]" color "#fff" size 16')
+    script._raw("                        else:")
+    script._raw('                            text "[msg.text]" color "#0f0" size 16 xalign 1.0')
+    script._raw("                        null height 8")
+    script._raw("            textbutton \"关闭\" action SetVariable(\"phone_visible\", False) xalign 0.5")
+    script.blank()
+    return script
+
+
+def _pattern_inventory(params: dict) -> RenPyScript:
+    """
+    背包道具系统。
+    params:
+      slots: 初始槽位数 (默认 8)
+      items: [{"id": "key", "name": "钥匙", "desc": "开锁用", "icon": "item_key"}, ...]
+    """
+    slots = params.get("slots", 8)
+    items = params.get("items", [])
+    script = RenPyScript()
+    script.comment("Inventory System")
+    script.default("inv_items", "[]")
+    script.default("inv_slots", str(slots))
+    script.blank()
+
+    script.python("""
+def inv_add(item_id, count=1):
+    for it in inv_items:
+        if it["id"] == item_id:
+            it["count"] += count
+            return True
+    if len(inv_items) < inv_slots:
+        inv_items.append({"id": item_id, "count": count})
+        renpy.notify("获得道具")
+        return True
+    renpy.notify("背包已满")
+    return False
+
+def inv_remove(item_id, count=1):
+    for it in inv_items:
+        if it["id"] == item_id and it["count"] >= count:
+            it["count"] -= count
+            if it["count"] == 0:
+                inv_items.remove(it)
+            return True
+    return False
+
+def inv_has(item_id, count=1):
+    for it in inv_items:
+        if it["id"] == item_id and it["count"] >= count:
+            return True
+    return False
+""")
+    script.blank()
+
+    # 物品定义
+    for item in items:
+        script.define(f'item_{item["id"]}_name', f'"{item.get("name", item["id"])}"')
+        script.define(f'item_{item["id"]}_desc', f'"{item.get("desc", "")}"')
+
+    script.blank()
+    # 背包界面
+    script._raw("screen inventory_ui():")
+    script._raw("    frame:")
+    script._raw("        xalign 0.5 yalign 0.5")
+    script._raw(f"        grid 4 {max(1, slots // 4)}:")
+    script._raw("            spacing 5")
+    script._raw("            for i in range(inv_slots):")
+    script._raw("                if i < len(inv_items):")
+    script._raw("                    $ it = inv_items[i]")
+    script._raw("                    imagebutton:")
+    script._raw("                        idle \"item_placeholder\"")
+    script._raw("                        action NullAction()")
+    script._raw("                        tooltip eval(f\"item_{it['id']}_desc\")")
+    script._raw("                else:")
+    script._raw("                    frame:")
+    script._raw("                        xsize 80 ysize 80")
+    script._raw('                        text "-" xalign 0.5 yalign 0.5')
+    script.blank()
+    return script
+
+
+def _pattern_music_room(params: dict) -> RenPyScript:
+    """
+    音乐室系统。
+    params:
+      tracks: [{"file": "bgm_01.ogg", "title": "主题曲", "unlock": "persistent.unlocked_01"}, ...]
+      screen_name: 屏幕名 (默认 "music_room")
+    """
+    tracks = params.get("tracks", [])
+    screen_name = params.get("screen_name", "music_room")
+    script = RenPyScript()
+    script.comment("Music Room")
+    script._raw(f"define {screen_name} = MusicRoom(fadeout=1.0)")
+    script.blank()
+
+    # 注册曲目
+    for i, track in enumerate(tracks):
+        unlock = track.get("unlock", "True")
+        script._raw(f'{screen_name}.add("{track["file"]}", always_unlocked={unlock})')
+        if i % 5 == 0:
+            script.blank()
+
+    script.blank()
+    # 音乐室界面
+    script._raw(f"screen {screen_name}():")
+    script._raw("    tag menu")
+    script._raw('    use game_menu(_("音乐室"), scroll="viewport"):')
+    script._raw("        vbox:")
+    script._raw("            spacing 8")
+    for track in tracks:
+        title = track.get("title", track["file"])
+        script._raw(f'            textbutton _("{title}") action {screen_name}.Play("{track["file"]}")')
+    script._raw("            null height 20")
+    script._raw(f'            textbutton _("停止") action {screen_name}.Stop()')
+    script._raw(f'            textbutton _("下一首") action {screen_name}.Next()')
+    script._raw(f'            textbutton _("上一首") action {screen_name}.Previous()')
+    script.blank()
+    return script
+
+
 # ── CLI 测试 ───────────────────────────────────────────
 
 def main():
@@ -897,6 +1075,9 @@ def main():
             "after_load_migration": "存档兼容性(版本升级数据迁移)",
             "layeredimage": "LayeredImage 立绘系统(多图层/多属性)",
             "fault_tolerance": "容错性配置(异常处理/存档兜底/缺失兜底)",
+            "phone": "手机短信系统(收发消息/通知)",
+            "inventory": "背包道具系统(物品/使用/槽位)",
+            "music_room": "音乐室(解锁BGM播放)",
        }
         print("📦 Ren'Py 预制模式:")
         for name, desc in registry.items():

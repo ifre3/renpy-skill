@@ -1,4 +1,4 @@
-﻿"""
+"""
 Ren'Py 项目脚手架 — 从 JSON schema 生成完整游戏项目
 
 用法：
@@ -340,7 +340,7 @@ label after_warp:
         ])
 
         return "\n".join(lines)
-def build(self) -> list:
+    def build(self) -> list:
         """生成完整项目骨架。返回生成的文件列表。"""
         self._mkdirs()
 
@@ -370,7 +370,7 @@ def build(self) -> list:
             print(f"scaffold: 已备份 {len(overwritten)} 个覆盖文件 (.bak):")
             for f in overwritten:
                 print(f"  {f}")
-for addon in self.config.get("addons", []):
+        for addon in self.config.get("addons", []):
             path = os.path.join(self.project_dir, "game", f"_{addon}.rpy")
             with open(path, "w", encoding="utf-8") as f:
                 f.write(f"## {addon} - 由脚手架生成\n")

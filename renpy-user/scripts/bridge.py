@@ -1,4 +1,4 @@
-﻿"""
+"""
 Ren'Py 脚本生成器 — 用 Python 链式 API 生成 .rpy 文件
 
 基于 Ren'Py 8.5.3 官方 AST (renpy/ast.py) 支持的语句类型：
@@ -670,7 +670,7 @@ class RenPyScript:
 
     # ── 输出 ─────────────────────────────────────────
 
-        def render(self) -> str:
+    def render(self) -> str:
         """返回生成的完整脚本字符串。自动执行基本语法验证，警告存入 self.warnings。"""
         text = "\n".join(self.lines)
         # 自动调用 validate()，结果存入 self.warnings
@@ -680,7 +680,8 @@ class RenPyScript:
             if err not in self.warnings:
                 self.warnings.append(err)
         return text
-def write(self, path: str, exists_ok: bool = True, encoding: str = "utf-8") -> "RenPyScript":
+
+    def write(self, path: str, exists_ok: bool = True, encoding: str = "utf-8") -> "RenPyScript":
         """
         将生成的脚本写入 .rpy 文件（UTF-8 编码）。
 
@@ -705,7 +706,8 @@ def write(self, path: str, exists_ok: bool = True, encoding: str = "utf-8") -> "
         with open(path, "w", encoding=encoding) as f:
             f.write(self.render())
         return self
-def validate(self) -> List[str]:
+
+    def validate(self) -> List[str]:
         """
         基本语法验证：检查常见问题。
 
