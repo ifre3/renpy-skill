@@ -1,52 +1,38 @@
 # Ren'Py Skills
 
-the skill package for Ren'Py 8.x development, encapsulating most of the Ren'Py 8.x syntax. This project is in early stages and was developed collaboratively with AI tools.
+Ren'Py 8.x 开发辅助 Skill 包。
 
-## Included Skills
+## 包含
 
-| Skill | Trigger | Purpose |
-|-------|---------|---------|
-| `renpy-dev` | Engineering toolchain | Packaging, linting, testing, diagnostics, exporting |
-| `renpy-user` | Content creation | Writing scenes, building projects, setting visuals, affection systems, galleries |
+| Skill | 做什么 | 不做什么 |
+|-------|--------|---------|
+| `renpy-dev` | 工程工具链 — Lint、编译、打包、测试、诊断 | 不写剧情、不生成代码 |
+| `renpy-user` | 参考手册 — Ren'Py 陷阱、最佳实践、源码路径索引 | 不输出模板、不代笔写代码 |
 
-## Quick Start
+## 目录
+
+```
+renpy-dev/             # 工程工具链（Python 脚本）
+├── SKILL.md
+├── scripts/           sdk_common.py, cli.py, analyze.py, diagnose.py, export.py, test_runner.py
+└── references/        sdk_config.md
+
+renpy-user/            # 纯参考（无脚本）
+├── SKILL.md
+└── references/        renpy_gotchas.md
+```
+
+## 快速开始
+
+内容创作 → AI 直接输出 `.rpy`，需要诊断/测试时加载 `renpy-dev`
 
 ```bash
-# Enable both skills
-hermes skill enable renpy-dev
-hermes skill enable renpy-user
+# Lint
+RenPyCLI().lint("D:/my_game")
+
+# 诊断
+diagnose_from_file("game/log.txt")
+
+# 分析项目结构
+Analyzer("D:/my_game").report()
 ```
-
-## Directory Structure
-
-```
-my/
-├── renpy-dev/          # Development tools skill (self-contained unit)
-│   ├── SKILL.md        # Skill definition and documentation
-│   ├── scripts/        # Python tool scripts
-│   └── references/     # SDK configuration reference
-├── renpy-user/         # Content creation skill (self-contained unit)
-│   ├── SKILL.md        # Skill definition and documentation
-│   ├── scripts/        # Python scripts (scaffold/bridge/patterns)
-│   └── references/     # Patterns API and common pitfalls
-└── README.md           # This file
-```
-
-## Maintenance Notes
-
-- Each skill is a **self-contained independent unit** — no code sharing across skills
-- `_version_guard.py` is duplicated in both skills by design (required by skill spec)
-- `.gitignore` only excludes runtime artifacts: `__pycache__/`, `*.pyc`, `*.pyo`, `.env`
-- Build artifacts (`my.zip`) and diagnostic reports (`say.md`) are excluded and should not be committed
-- After modifying any skill, run `hermes skill validate <name>` to check syntax
-
-## Development Tips
-
-- When adding new features, update the corresponding skill's Trigger table in `SKILL.md`
-- Refer to the `hermes-agent-skill-authoring` skill for complete SKILL.md authoring conventions
-
-## Status
-
-- **Stage:** Early development
-- **Target SDK:** Ren'Py ≥ 8.0
-- **Collaboration:** Built with AI assistance

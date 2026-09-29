@@ -25,9 +25,10 @@ class Export:
 
     # 需要提取的 Ren'Py 语句类型
     # (?:[^"\\]|\\.)* 可匹配含转义引号 \" 的文本
+    # say 的 who 允许带立绘属性（`e happy "..."`）
     LINE_PATTERNS = {
         "say": re.compile(
-            r'^\s*(?P<who>\w+)?\s*"'
+            r'^\s*(?P<who>\w+(?:\s+\w+)*)?\s*"'
             r'(?P<what>(?:[^"\\]|\\.)*)"\s*$'
         ),
         "narrator": re.compile(
@@ -36,24 +37,36 @@ class Export:
         "comment": re.compile(r'^\s*#\s*(?P<text>.*)$'),
     }
 
+    # 出现在这些语句关键字后的引号内容不是对话（如 play music "x.ogg"）
+    STATEMENT_KEYWORDS = {
+        "play", "queue", "stop", "show", "hide", "scene", "window", "voice",
+        "call", "jump", "return", "pause", "with", "if", "elif", "while",
+        "menu", "label", "screen", "image", "transform", "define", "default",
+        "style", "init", "python", "extend", "nvl", "add", "text", "testcase",
+    }
+
     def __init__(self, project_dir: str):
         self.project_dir = os.path.abspath(project_dir)
         self.game_dir = os.path.join(self.project_dir, "game")
 
     # ── 提取为 JSON ─────────────────────────────────────
 
-    def to_json(self, output_path: str, include_all: bool = False) -> dict:
+    def to_json(self, output_path: str, include_all: bool = False,
+                renpy_version: str = None) -> dict:
         """
         将项目中的 .rpy 对话/字符串提取为 JSON。
         include_all=True 时包含所有语句，否则只包含 say / narrator。
+        renpy_version 记录来源 SDK 版本（可选，默认 "unknown"）。
 
         返回解析后的 dict，同时写入 output_path。
         """
         data = {
             "meta": {
-                "renpy_version": "8.5.3",
+                "renpy_version": renpy_version or "unknown",
                 "project": os.path.basename(self.project_dir),
                 "exported_from": "rpy",
+                # files 的键是相对 game/ 目录的路径（不含 game/ 前缀）
+                "path_base": "game",
             },
             "files": {},
         }
@@ -167,14 +180,17 @@ class Export:
                 entries.append(entry)
                 continue
 
-            # 对话 (say "who" "what")
+            # 对话 (say "who attrs" "what")
             sm = self.LINE_PATTERNS["say"].match(stripped)
-            if sm and sm.group("who") and not sm.group("who").startswith("$"):
-                entry["type"] = "say"
-                entry["who"] = sm.group("who")
-                entry["text"] = sm.group("what")
-                entries.append(entry)
-                continue
+            if sm and sm.group("who"):
+                who = sm.group("who")
+                first_word = who.split()[0].lower()
+                if first_word not in self.STATEMENT_KEYWORDS and not who.startswith("$"):
+                    entry["type"] = "say"
+                    entry["who"] = who
+                    entry["text"] = sm.group("what")
+                    entries.append(entry)
+                    continue
 
             # 其他语句（可选）
             if include_all:
@@ -189,6 +205,7 @@ class Export:
         """
         从 JSON 文件恢复 .rpy 文件。
         只恢复 say/narrator 行（保留原始结构）。
+        output_dir 语义 = game 目录：恢复文件写入 output_dir/<相对路径>。
         返回处理文件数。
         """
         with open(json_path, "r", encoding="utf-8") as f:
@@ -198,6 +215,9 @@ class Export:
         count = 0
 
         for rel, entries in data.get("files", {}).items():
+            # 兼容含 game/ 前缀的键（外部编辑或旧格式），统一为相对 game/ 的路径
+            if rel.startswith("game/"):
+                rel = rel[len("game/"):]
             out_path = os.path.join(output_base, rel)
             os.makedirs(os.path.dirname(out_path), exist_ok=True)
 

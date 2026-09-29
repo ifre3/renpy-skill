@@ -1,81 +1,84 @@
 # Ren'Py 常见陷阱 & 最佳实践
 
-当 AI 使用 bridge.py 和 patterns.py 生成代码后，可能需要手动调整以下事项。
+经验性知识，不一定在官方文档或训练数据中覆盖。
 
 ---
 
 ## 图片资源
 
-- **bridge.py 不自动生成图片资源** — `show("eileen happy")` 只生成代码，图片文件需手动放入 `game/images/`
-- 图片命名约定：`images/` 下的 `png/jpg/webp` 自动注册，无需 `image` 语句
-- 模式生成的图片引用（如 gallery 的 `imagebutton`）需确保对应图片存在
+- 图片放入 `game/images/` 自动注册，无需 `image` 语句
+- 命名影响 tag/attribute：`eileen happy.png` → `show eileen happy`
+- 同一 tag 的 `show` 替换旧图，`scene` 清除所有图片
 
 ## 字体
 
-- `cjk_font` 模式生成的字体配置指向 `game/` 目录下的字体文件
-- 中文字体文件通常较大（10-20MB），注意分发体积
-- 如果字体缺失，Ren'Py 会静默回退到系统默认字体，不会报错
+- 中文字体文件通常 10-20MB，注意分销体积
+- 字体缺失时 Ren'Py **静默回退**到系统默认，不报错，结果就是界面字全是方块
+- 检查字体是否生效的方法：运行后看设置界面
 
 ## 缩进
 
-- bridge.py 自动管理缩进，但如果手动拼接 `.rpy` 代码片段，Ren'Py 要求 4 空格缩进
-- `python:` 块内的 Python 代码也必须 4 空格缩进
-- 混合 tab 和空格会导致 `SyntaxError`
+- Ren'Py 的缩进**只按空格计数**（lexer 用 `lstrip(" ")`），tab 不计入缩进宽度，混用 tab/空格会报 `Indentation mismatch` 或 `SyntaxError`
+- 全程统一 4 空格缩进最稳妥，`python:` 块内同理
 
 ## 变量作用域
 
-- `default` 声明的变量是全局持久化变量（保存在存档中）
-- `define` 声明的变量是全局常量（每次启动重新计算）
-- 在 `python:` 块中修改全局变量需用 `globals()["var_name"]` 或 `store.var_name`
-- bridge.py 的 `default()` 和 `define()` 方法正确生成对应语句
+- `define` = 全局常量（每次启动重新计算，**不改**）
+- `default` = 全局变量（保存在存档中，可改）
+- 修改 default 变量的初始值**不影响已有存档**（存档保留旧值）
+- 删除 default 变量 → 加载旧存档报错
+- `python:` 块中修改全局变量用 `store.var_name` 或 `globals()["var_name"]`
+
+## 存档兼容
+
+- 大版本更新时用 `after_load` label 做数据迁移：
+
+```renpy
+label after_load:
+    if not hasattr(persistent, "version"):
+        $ persistent.version = "1.0"
+    return
+```
 
 ## Screen 刷新
 
-- screen 默认每秒刷新多次，在 screen 的 python 块中避免重操作
-- 复杂计算应放在 label 中的 Python 块，结果存变量，screen 只读变量
+- screen 每秒刷新多次（约 30-60fps）
+- 不要在 screen 的 Python 块里做重操作（如循环、文件IO）
+- 复杂计算放到 label 中的 Python 块，screen 只读结果
 
-## 图片引用
+## Character 全参
 
-- `show eileen happy` 中的空格表示图片 tag + 属性：tag=`eileen`，attribute=`happy`
-- 同一个 tag 的新 show 会自动替换旧图片
-- `scene bg cafe` 清除所有图片并显示 bg cafe
+`Character()` 有 50+ 参数，不限于 color 和 image。可设：
 
-## 角色定义
-
-- 在 bridge.py 中 `character("e", "艾琳")` 生成的代码等价于：
-  ```renpy
-  define e = Character("艾琳")
-  ```
-- `Character` 支持大量参数：`color`, `who_color`, `what_color`, `image`, `callback` 等
-- 旁白（无角色名）用 `say(None, "文本")` 实现
-
-## 存档兼容性
-
-- 修改 `default` 变量的初始值不会影响已有存档（存档中保留旧值）
-- 添加新 `default` 变量不影响已有存档
-- 删除 `default` 变量可能导致加载旧存档时报错
-- 建议大版本更新时用 `after_load` label 做数据迁移
+```renpy
+define e = Character(
+    "艾琳",
+    who_font="SourceHanSansSC-Regular.otf",     # 名字字体
+    what_font="SourceHanSansSC-Regular.otf",     # 对话字体
+    what_size=22,
+    what_outlines=[(1, "#000", 0, 0)],           # 文字描边，中文可读性提升
+    show_side_image=Image("gui/side_eileen.png",
+                          xalign=0.0, yalign=1.0),
+    ctc="ctc_arrow",                             # 点击继续指示器
+    callback=renpy.python.revertable_function,   # 声音等回调
+)
+```
 
 ## label / jump / call
 
-- `jump("label_name")` 是 GOTO，不返回
-- `call("label_name")` 是子程序，遇到 `return` 返回调用点
-- `show screen` 在 label 间跳转时可能需要手动 `hide screen`
-
-## 菜单流程
-
-- `menu` 语句后的选项值（如 `"coffee"`）是跳转目标的 label 名
-- bridge.py 的 `menu([("显示文字", "跳转label"), ...])` 自动生成正确的 `.rpy`
-- 每个 menu 选项对应的 label 必须存在，否则 lint 会报错
-
-## 转场
-
-- `with fade` 作用于当前语句之后
-- `with None` 清除转场队列
-- ATL transform 定义在 `transform` 块中，可在 `show` 时通过 `at` 子句引用
+- `jump` = GOTO，不返回
+- `call` = 子程序调用，`return` 回到调用点
+- `show screen` 在 label 间跳转后可能需要手动 `hide screen`
 
 ## 诊断限制
 
-- `diagnose.py` 只能检测已知错误模式（SyntaxError、NameError、文件缺失等）
-- 逻辑错误（如剧情分歧条件写反）不会被捕获
-- 嵌套的 Python 语法错误（如 `python:` 块内的错误）定位可能不准确
+- `Diagnose` 只识别已知错误模式（SyntaxError、文件缺失等）
+- 逻辑错误（如条件写反）不会捕获
+- 嵌套的 Python 块内错误定位可能不准
+
+## 屏幕语言 (SL2) 常见坑
+
+- `bar` 的 `value` 必须是 `BarValue` 子类（`AnimatedValue`、`FieldValue` 等），不是整数
+- `viewport` 配合 `side_` 前缀属性：`side_xscroll`, `side_yscroll`
+- `imagebutton` 的 `idle`/`hover` 值必须是图片名，不是文件路径
+- `style_prefix` 只影响直接子元素，不影响孙元素

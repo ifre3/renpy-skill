@@ -15,8 +15,9 @@ metadata:
 
 | 文件 | 用途 | 一句话用法 |
 |------|------|-----------|
+| `scripts/sdk_common.py` | SDK 路径检测共用模块（cli/test_runner 依赖） | `detect_sdk()`, `find_platform_python(sdk)` |
 | `scripts/cli.py` | SDK CLI 封装（Lint/编译/打包/运行/翻译） | `RenPyCLI().lint("path")` |
-| `scripts/analyze.py` | 项目结构分析（labels/screens/images/悬空引用） | `Analyzer("path").analyze().report()` |
+| `scripts/analyze.py` | 项目结构分析（labels/screens/images/悬空引用，带行号） | `Analyzer("path").analyze().report()` |
 | `scripts/export.py` | JSON ↔ .rpy 双向转换（版本控制/迁移） | `Export("path").to_json("out.json")` |
 | `scripts/test_runner.py` | 自动化测试注入和执行 | `TestRunner("path").inject_test(code).run()` |
 | `scripts/diagnose.py` | 错误日志解析和项目诊断 | `diagnose_from_file("log.txt")` |
@@ -27,7 +28,7 @@ metadata:
 |------|------|
 | "检查代码有没有问题" | cli.lint 语法检查 |
 | "打包成 Windows 版 / APK" | cli.distribute 打包分发 |
-| "测试对话流程" | test_runner 自动测试 |
+| "测试对话流程" | test_runner 自动测试（testcase 语法：`run`/`click`/`advance until screen`/`assert eval`） |
 | "报这个错怎么修"、"闪退" | diagnose 解析错误日志 |
 | "分析项目结构"、"看看有多少 label" | analyze 结构分析 |
 | "导出项目结构成 JSON" | export 导出迁移 |
@@ -58,7 +59,7 @@ for issue in diagnose_from_file("game/log.txt"):
 
 | 场景 | 说明 |
 |------|------|
-| SDK 路径 | 自动检测：环境变量 `RENPY_SDK` → 向上查找 → 常见路径 fallback；也可显式传入 `sdk_path=` |
+| SDK 路径 | 自动检测（`sdk_common.py`）：`sdk_path=` 参数 → 环境变量 `RENPY_SDK` → 向上查找 → 已知路径；本机新装 SDK 只需在 `sdk_common.py` 的 `_KNOWN_SDK_PATHS` 追加一行 |
 | 错误诊断 | diagnose.py 只能识别已知错误模式，复杂逻辑 bug 不会捕获 |
 | 测试清理 | `inject_test()` 后调用 `remove_injected()` 清理测试文件 |
 | 游戏内容 | 需要写剧情/设画面/加系统？→ 加载 **renpy-user** Skill |

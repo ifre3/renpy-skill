@@ -13,7 +13,8 @@ Ren'Py 自动化测试执行器
 import os
 import sys
 import subprocess
-import tempfile
+
+from sdk_common import detect_sdk, find_platform_python
 
 
 class TestResult:
@@ -65,61 +66,15 @@ class TestResult:
 class TestRunner:
     """Ren'Py 自动化测试执行器。
 
-    通过 SDK 子进程执行 Ren'Py test 命令，不依赖 renpy-build/cli.py。
+    通过 SDK 子进程执行 renpy.py <project_dir> test。
     """
 
     def __init__(self, project_dir: str, sdk_path: str = None):
         self.project_dir = os.path.abspath(project_dir)
         self.game_dir = os.path.join(self.project_dir, "game")
         self._injected_files = []
-        self.sdk_path = sdk_path or self._detect_sdk()
-        self.python_exe = self._find_python()
-
-    @staticmethod
-    def _detect_sdk() -> str:
-        """检测 Ren'Py SDK 路径。"""
-        env = os.environ.get("RENPY_SDK", "")
-        if env and os.path.isdir(env) and os.path.isfile(os.path.join(env, "renpy.py")):
-            return os.path.abspath(env)
-        cur = os.path.dirname(os.path.abspath(__file__))
-        for _ in range(8):
-            parent = os.path.dirname(cur)
-            if parent == cur:
-                break
-            if os.path.isfile(os.path.join(parent, "renpy.py")):
-                return parent
-            cur = parent
-        fb = os.path.expanduser("~/renpy-sdk")
-        if os.path.isdir(fb) and os.path.isfile(os.path.join(fb, "renpy.py")):
-            return fb
-        raise RuntimeError(
-            "未找到 Ren'Py SDK。请设置环境变量 RENPY_SDK 或传 sdk_path= 参数"
-        )
-
-    @staticmethod
-    def _find_platform_python(sdk_path: str) -> str:
-        lib = os.path.join(sdk_path, "lib")
-        if sys.platform == "win32":
-            candidates = [
-                os.path.join(lib, "py3-windows-x86_64", "python.exe"),
-                os.path.join(lib, "py3-windows-i686", "python.exe"),
-            ]
-        elif sys.platform == "darwin":
-            candidates = [
-                os.path.join(lib, "py3-mac-x86_64", "python"),
-                os.path.join(lib, "py3-mac-arm64", "python"),
-            ]
-        else:
-            candidates = [
-                os.path.join(lib, "py3-linux-x86_64", "python"),
-            ]
-        for c in candidates:
-            if os.path.isfile(c):
-                return c
-        raise RuntimeError(f"在 {lib} 中找不到 Ren'Py Python 解释器")
-
-    def _find_python(self) -> str:
-        return self._find_platform_python(self.sdk_path)
+        self.sdk_path = detect_sdk(sdk_path)
+        self.python_exe = find_platform_python(self.sdk_path)
 
     def inject_test(self, test_code: str, filename: str = "auto_test.rpy") -> str:
         """注入测试脚本到项目 game/ 目录。返回完整路径。"""
@@ -183,6 +138,10 @@ class TestRunner:
 
 
 # ── 预置测试模式 ──────────────────────────────────────
+# 语法依据 Ren'Py 8.5.3 renpy/test/testparser.py：
+#   - testcase 内跳转用 `run <label>`（没有 `call` 语句）
+#   - `assert` 只接受 selector/True/False/eval；任意 Python 表达式须用 `assert eval "..."`
+#   - `advance` 支持 `until screen "..."` 后缀
 
 def make_scene_test(scenes: list) -> str:
     """
@@ -194,7 +153,7 @@ def make_scene_test(scenes: list) -> str:
     lines.append("")
     for label, expected in scenes:
         lines.append(f"testcase test_{label}:")
-        lines.append(f"    call {label}")
+        lines.append(f"    run {label}")
         if expected:
             lines.append(f"    advance until screen \"{expected}\"")
         else:
@@ -211,10 +170,10 @@ def make_menu_test(label: str, choices: list) -> str:
     lines = ["# 菜单选择测试 - 自动生成"]
     for i, (text, expected) in enumerate(choices):
         lines.append(f"testcase test_menu_{label}_{i}:")
-        lines.append(f"    call {label}")
+        lines.append(f"    run {label}")
         lines.append(f'    click "{text}"')
         if expected:
-            lines.append(f'    assert "{expected}" in renpy.get_all_labels()')
+            lines.append(f'    assert eval \'" {expected} " in renpy.get_all_labels()\'')
         lines.append("")
     return "\n".join(lines)
 

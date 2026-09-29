@@ -17,60 +17,15 @@ import os
 import sys
 import subprocess
 
+from sdk_common import detect_sdk, find_platform_python
+
 
 class RenPyCLI:
     """Ren'Py SDK 命令行封装。"""
 
     def __init__(self, sdk_path: str = None):
-        self.sdk_path = sdk_path or self._detect_sdk()
-        self.python_exe = self._find_python()
-
-    # ── SDK 路径探测 ────────────────────────────────────
-
-    @staticmethod
-    def _detect_sdk() -> str:
-        env = os.environ.get("RENPY_SDK", "")
-        if env and os.path.isdir(env) and os.path.isfile(os.path.join(env, "renpy.py")):
-            return os.path.abspath(env)
-        cur = os.path.dirname(os.path.abspath(__file__))
-        for _ in range(8):
-            parent = os.path.dirname(cur)
-            if parent == cur:
-                break
-            if os.path.isfile(os.path.join(parent, "renpy.py")):
-                return parent
-            cur = parent
-        fb = os.path.expanduser("~/renpy-sdk")
-        if os.path.isdir(fb) and os.path.isfile(os.path.join(fb, "renpy.py")):
-            return fb
-        raise RuntimeError(
-            "未找到 Ren'Py SDK。请设置环境变量 RENPY_SDK 或传 sdk_path= 参数"
-        )
-
-    @staticmethod
-    def _find_platform_python(sdk_path: str) -> str:
-        lib = os.path.join(sdk_path, "lib")
-        if sys.platform == "win32":
-            candidates = [
-                os.path.join(lib, "py3-windows-x86_64", "python.exe"),
-                os.path.join(lib, "py3-windows-i686", "python.exe"),
-            ]
-        elif sys.platform == "darwin":
-            candidates = [
-                os.path.join(lib, "py3-mac-x86_64", "python"),
-                os.path.join(lib, "py3-mac-arm64", "python"),
-            ]
-        else:
-            candidates = [
-                os.path.join(lib, "py3-linux-x86_64", "python"),
-            ]
-        for c in candidates:
-            if os.path.isfile(c):
-                return c
-        raise RuntimeError(f"在 {lib} 中找不到 Ren'Py Python 解释器")
-
-    def _find_python(self) -> str:
-        return self._find_platform_python(self.sdk_path)
+        self.sdk_path = detect_sdk(sdk_path)
+        self.python_exe = find_platform_python(self.sdk_path)
 
     def _renpy_py(self) -> str:
         return os.path.join(self.sdk_path, "renpy.py")
@@ -93,9 +48,9 @@ class RenPyCLI:
         """运行项目 (renpy.py <basedir>)。"""
         return self._run([project_dir])
 
-    def quit(self) -> subprocess.CompletedProcess:
+    def quit(self, project_dir: str) -> subprocess.CompletedProcess:
         """退出 Ren'Py (renpy.py <basedir> quit)。"""
-        return self._run(["quit"])
+        return self._run([project_dir, "quit"])
 
     def compile(self, project_dir: str, keep_orphan_rpyc: bool = False) -> subprocess.CompletedProcess:
         """编译 .rpy → .rpyc。"""
@@ -308,13 +263,20 @@ def main():
         "run", "lint", "compile", "test", "distribute",
         "translate", "android_build", "web_build",
     ], help="要执行的命令")
+    parser.add_argument("extra", nargs="?", default=None,
+                        help="translate 需要：目标语言（如 chinese）")
     parser.add_argument("--sdk", default=None, help="SDK 路径")
 
     args = parser.parse_args()
     cli = RenPyCLI(sdk_path=args.sdk)
 
     method = getattr(cli, args.command.replace("-", "_"))
-    result = method(args.project_dir)
+    if args.command == "translate":
+        if not args.extra:
+            parser.error("translate 需要 extra 参数指定语言，例如：python cli.py <项目> translate chinese")
+        result = method(args.project_dir, args.extra)
+    else:
+        result = method(args.project_dir)
     print(cli.format_result(result))
     sys.exit(result.returncode)
 

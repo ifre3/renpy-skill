@@ -49,41 +49,45 @@ class Analyzer:
             with open(fpath, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read()
 
+            def lineno(offset: int) -> int:
+                """字符偏移 → 行号（1 起）。"""
+                return content.count("\n", 0, offset) + 1
+
             # label 定义: label <name>:
             for m in re.finditer(r'^label\s+(\w[\w.]*)\s*(?=:|$)', content, re.MULTILINE):
-                self.results["labels"].append((m.group(1), rel, m.start()))
+                self.results["labels"].append((m.group(1), rel, lineno(m.start())))
 
             # screen 定义: screen <name>:
             for m in re.finditer(r'^screen\s+(\w[\w.]*)\s*:', content, re.MULTILINE):
-                self.results["screens"].append((m.group(1), rel, m.start()))
+                self.results["screens"].append((m.group(1), rel, lineno(m.start())))
 
             # image 定义: image <name> = 或 image <tag> <attribute>
             for m in re.finditer(r'^image\s+(\S+(?:\s+\S+)*?)\s*=', content, re.MULTILINE):
-                self.results["images"].append((m.group(1).strip(), rel, m.start()))
+                self.results["images"].append((m.group(1).strip(), rel, lineno(m.start())))
             for m in re.finditer(r'^image\s+(\w+)\s+(\w+)', content, re.MULTILINE):
                 if "=" not in m.group(0):
-                    self.results["images"].append((f"{m.group(1)} {m.group(2)}", rel, m.start()))
+                    self.results["images"].append((f"{m.group(1)} {m.group(2)}", rel, lineno(m.start())))
 
             # transform 定义: transform <name>:
             for m in re.finditer(r'^transform\s+(\w[\w.]*)\s*:', content, re.MULTILINE):
-                self.results["transforms"].append((m.group(1), rel, m.start()))
+                self.results["transforms"].append((m.group(1), rel, lineno(m.start())))
 
             # character 定义: define <var> = Character(...)
             for m in re.finditer(r'define\s+(\w+)\s*=\s*Character\(', content):
-                self.results["characters"].append((m.group(1), rel, m.start()))
+                self.results["characters"].append((m.group(1), rel, lineno(m.start())))
 
             # define 语句（不含 Character）
             for m in re.finditer(r'define\s+(\w+(?:\.\w+)*)\s*=', content):
                 if "Character(" not in m.group(0):
-                    self.results["defines"].append((m.group(1), rel, m.start()))
+                    self.results["defines"].append((m.group(1), rel, lineno(m.start())))
 
             # call 目标
             for m in re.finditer(r'call\s+(\w[\w.]*)', content):
-                self.results["calls"].append((m.group(1), rel, m.start() + 1))
+                self.results["calls"].append((m.group(1), rel, lineno(m.start())))
 
             # jump 目标
             for m in re.finditer(r'jump\s+(\w[\w.]*)', content):
-                self.results["jumps"].append((m.group(1), rel, m.start() + 1))
+                self.results["jumps"].append((m.group(1), rel, lineno(m.start())))
 
         # 检查悬空引用
         self._find_orphan_refs()
@@ -131,13 +135,13 @@ class Analyzer:
                 items = self.results.get(category, [])
                 if items:
                     lines.append(f"\n{category}:")
-                    for name, frel, _ in sorted(items):
-                        lines.append(f"  • {name}  ({frel})")
+                    for name, frel, ln in sorted(items):
+                        lines.append(f"  • {name}  ({frel}:{ln})")
 
             if self.results["orphan_refs"]:
                 lines.append("\n⚠️  悬空引用:")
-                for name, frel, _ in self.results["orphan_refs"]:
-                    lines.append(f"  • {name}  ({frel}) — 目标 label 不存在")
+                for name, frel, ln in self.results["orphan_refs"]:
+                    lines.append(f"  • {name}  ({frel}:{ln}) — 目标 label 不存在")
 
         if not any(v > 0 for v in summary.values()):
             lines.append("⚠️  未找到任何 .rpy 文件或结构定义。")

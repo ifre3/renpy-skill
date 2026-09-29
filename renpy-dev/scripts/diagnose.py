@@ -254,7 +254,7 @@ def check_project(project_dir: str) -> list:
             issues.append({
                 "type": f"缺少 {f}",
                 "severity": "warning",
-                "fix": f"创建 game/{f}。可用 scaffold.py 生成。"
+                "fix": f"创建 game/{f}。可从 Ren'Py SDK 自带模板项目拷贝，或用 launcher 的 generate_gui 重建。"
             })
 
     # 检查是否有角色定义
