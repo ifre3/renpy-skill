@@ -1,5 +1,5 @@
 """
-Ren'Py SDK 路径检测 — cli.py / test_runner.py 共用模块
+Ren'Py SDK 路径检测 — 供 renpy-dev 各脚本共用
 
 用法：
     from sdk_common import detect_sdk, find_platform_python

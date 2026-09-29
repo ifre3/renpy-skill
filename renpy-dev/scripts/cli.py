@@ -1,14 +1,13 @@
 """
-Ren'Py SDK CLI 封装 — 封装 renpy.py CLI 子命令
+Ren'Py SDK CLI 封装（瘦身版）— 只保留高频工程操作
 
 用法：
     cli = RenPyCLI(sdk_path="D:/renpy-8.5.3-sdk")
-    cli.lint("D:/projects/my_game")           # 检查脚本
-    cli.compile("D:/projects/my_game")        # 编译
-    cli.distribute("D:/projects/my_game")     # 构建发布包
-    cli.translate("D:/projects/my_game", "chinese")
-    cli.run("D:/projects/my_game")            # 运行
-    cli.test("D:/projects/my_game")           # 运行测试
+    cli.lint("D:/my_game")                    # 检查脚本
+    cli.compile("D:/my_game")                 # 编译
+    cli.distribute("D:/my_game")              # 桌面发布包
+    cli.translate("D:/my_game", "chinese")    # 生成翻译
+    cli.run("D:/my_game")                     # 运行
 
 参考：Ren'Py 8.5.3 CLI (doc/cli.html)
 """
@@ -21,7 +20,7 @@ from sdk_common import detect_sdk, find_platform_python
 
 
 class RenPyCLI:
-    """Ren'Py SDK 命令行封装。"""
+    """Ren'Py SDK 命令行封装（高频操作）。"""
 
     def __init__(self, sdk_path: str = None):
         self.sdk_path = detect_sdk(sdk_path)
@@ -42,7 +41,7 @@ class RenPyCLI:
             timeout=timeout,
         )
 
-    # ── 核心工作流命令 ──────────────────────────────────
+    # ── 运行 ────────────────────────────────────────────
 
     def run(self, project_dir: str) -> subprocess.CompletedProcess:
         """运行项目 (renpy.py <basedir>)。"""
@@ -52,6 +51,20 @@ class RenPyCLI:
         """退出 Ren'Py (renpy.py <basedir> quit)。"""
         return self._run([project_dir, "quit"])
 
+    # ── 检查与编译 ──────────────────────────────────────
+
+    def lint(self, project_dir: str, filename: str = None,
+             error_code: bool = False, all_problems: bool = False) -> subprocess.CompletedProcess:
+        """检查脚本 (Lint)。"""
+        args = [project_dir, "lint"]
+        if filename:
+            args.append(filename)
+        if error_code:
+            args.append("--error-code")
+        if all_problems:
+            args.append("--all-problems")
+        return self._run(args)
+
     def compile(self, project_dir: str, keep_orphan_rpyc: bool = False) -> subprocess.CompletedProcess:
         """编译 .rpy → .rpyc。"""
         args = [project_dir, "compile"]
@@ -59,69 +72,27 @@ class RenPyCLI:
             args.append("--keep-orphan-rpyc")
         return self._run(args)
 
-    def director(self, project_dir: str) -> subprocess.CompletedProcess:
-        """启动交互式导演模式。"""
-        return self._run([project_dir, "director"])
-
     def rmpersistent(self, project_dir: str) -> subprocess.CompletedProcess:
-        """删除持久化数据。"""
+        """删除持久化数据（⚠️ 不可恢复）。"""
         return self._run([project_dir, "rmpersistent"])
 
-    # ── 验证与测试 ──────────────────────────────────────
-
-    def lint(self, project_dir: str, filename: str = None,
-             error_code: bool = False, no_orphan_tl: bool = False,
-             by_character: bool = False, all_problems: bool = False) -> subprocess.CompletedProcess:
-        """检查脚本 (Lint)。"""
-        args = [project_dir, "lint"]
-        if filename:
-            args.append(filename)
-        if error_code:
-            args.append("--error-code")
-        if no_orphan_tl:
-            args.append("--no-orphan-tl")
-        if by_character:
-            args.append("--by-character")
-        if all_problems:
-            args.append("--all-problems")
-        return self._run(args)
-
-    def test(self, project_dir: str, testcase: str = None,
-             enable_all: bool = False, junit_xml: str = None) -> subprocess.CompletedProcess:
-        """运行测试用例。"""
-        args = [project_dir, "test"]
-        if testcase:
-            args.append(testcase)
-        if enable_all:
-            args.append("--enable_all")
-        if junit_xml:
-            args.append(f"--junit-xml={junit_xml}")
-        return self._run(args)
-
-    # ── 构建与发布 ──────────────────────────────────────
+    # ── 构建与分发 ──────────────────────────────────────
 
     def distribute(self, project_dir: str, package: list = None,
-                   packagedest: str = None, no_archive: bool = False,
-                   no_update: bool = False, format_: str = None) -> subprocess.CompletedProcess:
-        """构建发布包 (distribute)。"""
+                   packagedest: str = None, no_update: bool = False) -> subprocess.CompletedProcess:
+        """构建桌面发布包 (Windows/macOS/Linux)。"""
         args = [project_dir, "distribute"]
-        if package:
-            for p in package:
-                args.extend(["--package", p])
+        for p in package or []:
+            args.extend(["--package", p])
         if packagedest:
             args.extend(["--packagedest", packagedest])
-        if no_archive:
-            args.append("--no-archive")
         if no_update:
             args.append("--no-update")
-        if format_:
-            args.extend(["--format", format_])
         return self._run(args, timeout=600)
 
     def android_build(self, project_dir: str, destination: str = None,
-                      bundle: bool = False, install: bool = False,
-                      launch: bool = False) -> subprocess.CompletedProcess:
-        """构建 Android 发布包。"""
+                      bundle: bool = False, install: bool = False) -> subprocess.CompletedProcess:
+        """构建 Android 发布包（耗时）。"""
         args = ["launcher", "android_build", project_dir]
         if destination:
             args.extend(["--destination", destination])
@@ -129,21 +100,11 @@ class RenPyCLI:
             args.append("--bundle")
         if install:
             args.append("--install")
-        if launch:
-            args.append("--launch")
         return self._run(args, timeout=600)
-
-    def ios_create(self, project_dir: str, destination: str) -> subprocess.CompletedProcess:
-        """创建 iOS Xcode 项目。"""
-        return self._run(["launcher", "ios_create", project_dir, destination], timeout=600)
-
-    def ios_populate(self, project_dir: str, destination: str) -> subprocess.CompletedProcess:
-        """更新 iOS Xcode 项目内容。"""
-        return self._run(["launcher", "ios_populate", project_dir, destination], timeout=600)
 
     def web_build(self, project_dir: str, destination: str = None,
                   launch: bool = False) -> subprocess.CompletedProcess:
-        """构建 Web 发布包。"""
+        """构建 Web (HTML5) 发布包。"""
         args = ["launcher", "web_build", project_dir]
         if destination:
             args.extend(["--destination", destination])
@@ -154,26 +115,14 @@ class RenPyCLI:
     # ── 翻译与本地化 ────────────────────────────────────
 
     def translate(self, project_dir: str, language: str,
-                  count: bool = False, rot13: bool = False,
-                  piglatin: bool = False, empty: bool = False,
-                  strings_only: bool = False) -> subprocess.CompletedProcess:
+                  empty: bool = False, strings_only: bool = False) -> subprocess.CompletedProcess:
         """生成/更新翻译文件。"""
         args = [project_dir, "translate", language]
-        if count:
-            args.append("--count")
-        if rot13:
-            args.append("--rot13")
-        if piglatin:
-            args.append("--piglatin")
         if empty:
             args.append("--empty")
         if strings_only:
             args.append("--strings-only")
         return self._run(args)
-
-    def dialogue(self, project_dir: str, language: str) -> subprocess.CompletedProcess:
-        """提取/管理对话翻译。"""
-        return self._run([project_dir, "dialogue", language])
 
     def extract_strings(self, project_dir: str, language: str,
                         destination: str, merge: bool = False) -> subprocess.CompletedProcess:
@@ -191,55 +140,12 @@ class RenPyCLI:
             args.append("--replace")
         return self._run(args)
 
-    # ── 启动器命令 ──────────────────────────────────────
-
-    def generate_gui(self, project_dir: str, width: int = 1280,
-                     height: int = 720, accent: str = None,
-                     start: bool = False) -> subprocess.CompletedProcess:
-        """生成 GUI。"""
-        args = ["launcher", "generate_gui", project_dir,
-                f"--width={width}", f"--height={height}"]
-        if accent:
-            args.append(f"--accent={accent}")
-        if start:
-            args.append("--start")
-        return self._run(args)
-
-    def gui_images(self, project_dir: str) -> subprocess.CompletedProcess:
-        """生成 GUI 图片。"""
-        return self._run(["launcher", "gui_images", project_dir])
-
-    def get_projects_directory(self) -> subprocess.CompletedProcess:
-        """获取项目目录。"""
-        return self._run(["launcher", "get_projects_directory"])
-
-    def set_projects_directory(self, directory: str) -> subprocess.CompletedProcess:
-        """设置项目目录。"""
-        return self._run(["launcher", "set_projects_directory", directory])
-
-    def set_project(self, directory: str) -> subprocess.CompletedProcess:
-        """设置当前项目。"""
-        return self._run(["launcher", "set_project", directory])
-
-    def add_from_to_calls(self, project_dir: str) -> subprocess.CompletedProcess:
-        """为已有 call 添加 from 子句。"""
-        return self._run([project_dir, "add_from_to_calls"])
-
-    def update(self, project_dir: str, url: str, force: bool = False) -> subprocess.CompletedProcess:
-        """从网络更新项目。"""
-        args = [project_dir, "update", url]
-        if force:
-            args.append("--force")
-        return self._run(args)
-
     # ── 工具方法 ────────────────────────────────────────
 
     def format_result(self, result: subprocess.CompletedProcess) -> str:
         """格式化命令执行结果。"""
-        lines = []
-        lines.append(f"退出码: {result.returncode}")
+        lines = [f"退出码: {result.returncode}"]
         if result.stdout.strip():
-            # 只显示最后 30 行
             out_lines = result.stdout.strip().split("\n")
             if len(out_lines) > 30:
                 out_lines = out_lines[-30:]
@@ -260,7 +166,7 @@ def main():
     parser = argparse.ArgumentParser(description="Ren'Py SDK CLI 封装")
     parser.add_argument("project_dir", help="项目目录")
     parser.add_argument("command", choices=[
-        "run", "lint", "compile", "test", "distribute",
+        "run", "lint", "compile", "distribute",
         "translate", "android_build", "web_build",
     ], help="要执行的命令")
     parser.add_argument("extra", nargs="?", default=None,
@@ -270,7 +176,7 @@ def main():
     args = parser.parse_args()
     cli = RenPyCLI(sdk_path=args.sdk)
 
-    method = getattr(cli, args.command.replace("-", "_"))
+    method = getattr(cli, args.command)
     if args.command == "translate":
         if not args.extra:
             parser.error("translate 需要 extra 参数指定语言，例如：python cli.py <项目> translate chinese")

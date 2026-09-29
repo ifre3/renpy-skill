@@ -70,12 +70,6 @@ define e = Character(
 - `call` = 子程序调用，`return` 回到调用点
 - `show screen` 在 label 间跳转后可能需要手动 `hide screen`
 
-## 诊断限制
-
-- `Diagnose` 只识别已知错误模式（SyntaxError、文件缺失等）
-- 逻辑错误（如条件写反）不会捕获
-- 嵌套的 Python 块内错误定位可能不准
-
 ## 屏幕语言 (SL2) 常见坑
 
 - `bar` 的 `value` 必须是 `BarValue` 子类（`AnimatedValue`、`FieldValue` 等），不是整数
