@@ -5,3 +5,4 @@ __pycache__/
 .env
 my.zip
 say.md
+*.exe
