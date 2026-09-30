@@ -1,6 +1,6 @@
 ---
 name: renpy-dev
-description: "打包/Lint/编译/翻译。当你需要工程工具链时激活。"
+description: "Ren'Py 工程工具链：lint/编译/打包/翻译/结构分析，以及项目体检（崩溃排查、traceback 判读、汉化缺句与质检、字体方块）。当你需要跑 lint、打包发行版、做汉化或排查报错时激活。"
 compatibility: "renpy>=8.0"
 metadata:
   openclaw:
@@ -13,11 +13,16 @@ metadata:
 
 ## 脚本速览
 
-| 文件 | 用途 | 一句话用法 |
+| 文件 | 用途 | 一句话用法（CLI，在 skill 根目录执行） |
 |------|------|-----------|
-| `scripts/sdk_common.py` | SDK 路径检测共用模块（cli 依赖） | `detect_sdk()`, `find_platform_python(sdk)` |
-| `scripts/cli.py` | SDK CLI 封装：Lint/编译/打包/运行/翻译 | `RenPyCLI().lint("path")` |
-| `scripts/analyze.py` | 项目结构分析（labels/screens/悬空引用，带行号，离线可用） | `Analyzer("path").analyze().report()` |
+| `scripts/sdk_common.py` | SDK 路径检测共用模块（其余脚本的依赖） | 库用：`detect_sdk()`, `find_platform_python(sdk)` |
+| `scripts/cli.py` | SDK CLI 封装：Lint/编译/打包/运行/翻译 | `python scripts/cli.py <项目> lint [--sdk <SDK>]` |
+| `scripts/analyze.py` | 项目结构分析（labels/screens/悬空引用，带行号，离线可用） | `python scripts/analyze.py <项目路径> [-v]` |
+| `scripts/check_assets.py` | 资源完整性检查（.rpy 引用 vs 实际文件，报缺失/孤设） | `python scripts/check_assets.py --path <项目路径>` |
+| `scripts/setup_fonts.py` | 字体适配（detect 检测 / config 生成配置 / fallback 回退链 / list 推荐） | `python scripts/setup_fonts.py detect --path <项目路径>` |
+| `scripts/setup_i18n.py` | 多语言基础设施（生成 tl/ 目录、语言 Screen、字体配置，不含翻译内容） | `python scripts/setup_i18n.py --path <项目路径> --lang zh en ja` |
+| `scripts/optimize_assets.py` | 批量压缩图片/音频减小包体积（pngquant/jpegoptim/ffmpeg 缺失时自动降级为复制） | `python scripts/optimize_assets.py --input ./game/images --output ./out` |
+| `scripts/tl_check.py` | tl 翻译文件质检（格式串损坏/插值变量被翻/{}标签/空译文，`--fix` 修机械性问题，修前先备份） | `python scripts/tl_check.py <项目路径> --lang schinese [--fix]` |
 
 ## Trigger 关键词
 
@@ -30,19 +35,21 @@ metadata:
 
 ## 快速入门
 
-```python
-from cli import RenPyCLI
-cli = RenPyCLI()
-print(cli.format_result(cli.lint("D:/my_game", error_code=True)))
-
-from analyze import Analyzer
-print(Analyzer("D:/my_game").analyze().report(verbose=True))
+```bash
+python scripts/cli.py "D:/my_game" lint             # 语法检查（退出码透传 SDK）
+python scripts/analyze.py "D:/my_game" -v           # 结构分析：labels/screens/悬空引用
+python scripts/check_assets.py --path "D:/my_game"  # 资源缺失/孤设
 ```
+
+需要库调用（批量场景、自定义编排）时再 import：`RenPyCLI().lint(path)`、`Analyzer(path).analyze().report()`，方法签名与返回值见 [references/sdk_config.md](references/sdk_config.md)。
 
 ## 注意事项
 
 | 场景 | 说明 |
 |------|------|
+| **项目体检（优先用现成工具）** | renpy-tools 工具包（位于 `<SDK>/tools/`）统一入口：`python <SDK>/tools/renpy-tools-cli.py all <项目> -l schinese`。子命令：`crash` 崩溃风险、`untranslated` 空译文、`charname` 名字框漏译、`integrity` 变量/标签完整性、`label` 标签问题、`all` 全跑。`<SDK>` 用 `sdk_common.detect_sdk()` 解析（环境变量 `RENPY_SDK` 最优先）；找不到工具包时提示用户安装，不要现写替代品。闪退/缺句/名字英文先跑这个 |
+| **翻译文件质检（tl 侧唯一工具）** | 上面工具跳过 tl 目录；用**内置**的 `python scripts/tl_check.py <项目> --lang schinese [--fix]` 查翻译侧四种崩溃/显示隐患：`%(...)s` 丢类型字符（`ValueError: unsupported format character` 秒崩）、插值变量名被机翻（`[text]→[文本]`）、`{}` 标签损坏、空译文。`--fix` 自动修机械性问题（修前先备份） |
+| 反编译 .rpyc / 提台词 / 剧情地图 | 用已装的 **renpy-script-decompile** 技能（无需 unrpyc，纯 Python 解 slot + pickle stub） |
 | SDK 路径 | 自动检测（`sdk_common.py`）：`sdk_path=` 参数 → 环境变量 `RENPY_SDK` → 向上查找 → 已知路径；本机新装 SDK 只需在 `_KNOWN_SDK_PATHS` 追加一行 |
 | 错误诊断 | **没有诊断脚本**——把 log.txt/traceback 直接给 AI 判读即可，比正则匹配准 |
 | 测试 | 没有测试脚本——Ren'Py testcase 语法（`run`/`click`/`advance until screen`/`assert eval`）AI 直接写在 .rpy 里，用 `renpy.py 项目 test` 执行 |
@@ -53,6 +60,8 @@ print(Analyzer("D:/my_game").analyze().report(verbose=True))
 ## 进阶参考
 
 [SDK 配置 & CLI 命令速查](references/sdk_config.md) — 自动检测逻辑、全部 CLI 命令
+
+[剧本 → 脚本工作流](references/text2script_workflow.md) — 原始剧本转 .rpy 的拆分/命名/演出注释规范，及资产文档格式
 
 ## 版本边界
 

@@ -4,6 +4,33 @@
 > AI 的职责是判断场景 → 调度正确工具 → 处理工具输出。
 > 本地工具缺失时先 `pip install`（装到隔离环境），不要现写解析脚本。
 
+## 本地工具优先（renpy-tools 工具包，位于 `<SDK>/tools/`）
+
+汉化质检和崩溃排查**先用本地这套**，再考虑 pip 工具。统一入口（`<SDK>` 按 `RENPY_SDK` 环境变量或 renpy-dev 的 `sdk_common.detect_sdk()` 解析）：
+
+```bash
+cd "<SDK>/tools"
+python renpy-tools-cli.py list                    # 列出所有子工具
+
+# 崩溃风险检测（已默认跳过引擎目录；上报前会做作用域核实，误报少）
+python renpy-tools-cli.py crash <项目路径>
+
+# 翻译质检：角色/变量/标签/转义完整性
+python renpy-tools-cli.py integrity <项目路径> -l schinese
+# 空译文/原文=译文 检测（纯标签+标点条目自动归为无需翻译）
+python renpy-tools-cli.py untranslated <项目路径>/game/tl/schinese
+
+# 角色名字框完整性：Character("Name") 是否有 old "Name" 字符串翻译
+# （名字框走 substitute(translate=True)，缺条目就显示英文；可 --stub 生成待填骨架）
+python renpy-tools-cli.py charname <项目路径> -l schinese
+
+# AI 翻译回填（autotranslate.py，安全流程见 tools/README.md）
+```
+
+适用场景对照：汉化后闪退 → `crash`；汉化缺句/质检 → `integrity` + `untranslated`；
+字体方块 → renpy_gotchas.md 的 font_replacement_map 方案；rpyc 反编译/提台词 → 优先用已装的
+**renpy-script-decompile** 技能（纯 Python，不装任何东西），批量处理或需要 RPA/存档时再用下面的 rpycdec。
+
 ## 工具总览
 
 | 工具 | 能力 | 安装 |
