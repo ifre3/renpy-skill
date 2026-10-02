@@ -70,7 +70,13 @@ def extract_references(rpy_files):
             for asset_type, info in ASSET_TYPES.items():
                 for pattern in info["patterns"]:
                     for match in re.finditer(pattern, line_before_comment):
+                        if not match.groups():
+                            continue  # 无捕获组的模式（如 stop music）不产生引用
                         ref = match.group(1)
+                        # 剥离 ATL 音频前缀，如 <from 0 to 129>song.mp3 / <loop 3.5>x.ogg
+                        ref = re.sub(r"^<[^>]*>", "", ref)
+                        if not ref:
+                            continue
                         refs[asset_type].add((ref, str(rpy_file), lineno))
 
     return refs
@@ -83,7 +89,7 @@ def list_actual_files(project_path):
 
     # 标准资源目录
     scan_dirs = {
-        "image": ["images", "images/bg", "images/chara", "images/cg", "images/ui"],
+        "image": ["images", "images/bg", "images/chara", "images/cg", "images/ui", "gui"],
         "audio": ["audio", "audio/bgm", "audio/sfx", "audio/voice"],
         "font": ["fonts"],
     }
@@ -92,9 +98,17 @@ def list_actual_files(project_path):
         for d in dirs:
             dir_path = game_dir / d
             if dir_path.exists():
-                for f in dir_path.iterdir():
-                    if f.suffix.lower() in ASSET_TYPES[asset_type]["exts"]:
+                for f in dir_path.rglob("*"):
+                    if f.is_file() and f.suffix.lower() in ASSET_TYPES[asset_type]["exts"]:
                         actual[asset_type].add(f.name)
+
+    # 很多发行版把音频/字体直接放在 game/ 根目录，一并索引
+    for f in game_dir.iterdir():
+        if f.is_file():
+            ext = f.suffix.lower()
+            for at, info in ASSET_TYPES.items():
+                if ext in info["exts"]:
+                    actual[at].add(f.name)
 
     return actual
 
@@ -123,6 +137,18 @@ def check_assets(project_path):
 
     total_issues = 0
 
+    # 预建小写索引（文件名 / 去扩展名），避免 引用数×文件数 的 O(n²) 比对
+    def _lower_index(names):
+        s = set()
+        for fname in names:
+            s.add(fname.lower())
+            s.add(os.path.splitext(fname)[0].lower())
+        return s
+
+    img_index = _lower_index(actual.get("image", set()))
+    audio_index = _lower_index(actual.get("audio", set()))
+    font_index = _lower_index(actual.get("font", set()))
+
     # ---- 检查图片资源 ----
     print("=" * 60)
     print("📷 图片资源检查")
@@ -130,16 +156,14 @@ def check_assets(project_path):
 
     missing_images = []
     for ref, fpath, lineno in refs.get("image", set()):
-        # 检查引用内容是否直接是文件名
-        found = False
-        for fname in actual.get("image", set()):
-            if ref.lower() == fname.lower():
-                found = True
-                break
-            # 不带扩展名的比对
-            if os.path.splitext(ref)[0].lower() == os.path.splitext(fname)[0].lower():
-                found = True
-                break
+        # 检查引用内容是否直接是文件名（引用可能带 gui/overlay/ 之类的路径前缀）
+        rl = ref.lower()
+        found = (
+            rl in img_index
+            or os.path.splitext(rl)[0] in img_index
+            or os.path.basename(rl) in img_index
+            or os.path.splitext(os.path.basename(rl))[0] in img_index
+        )
         if not found:
             # 检查是不是 Ren'Py 定义的图像名（define image），那里不需要实际文件
             # 或者在 scene/show 里用的不是文件名而是标签
@@ -165,11 +189,7 @@ def check_assets(project_path):
 
     missing_audio = []
     for ref, fpath, lineno in refs.get("audio", set()):
-        found = any(
-            ref.lower() == fname.lower()
-            for fname in actual.get("audio", set())
-        )
-        if not found:
+        if ref.lower() not in audio_index and os.path.splitext(ref)[0].lower() not in audio_index:
             missing_audio.append((ref, fpath, lineno))
 
     if missing_audio:
@@ -189,11 +209,7 @@ def check_assets(project_path):
 
     missing_fonts = []
     for ref, fpath, lineno in refs.get("font", set()):
-        found = any(
-            ref.lower() == fname.lower()
-            for fname in actual.get("font", set())
-        )
-        if not found:
+        if ref.lower() not in font_index and os.path.splitext(ref)[0].lower() not in font_index:
             missing_fonts.append((ref, fpath, lineno))
 
     if missing_fonts:

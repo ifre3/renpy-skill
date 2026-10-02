@@ -136,3 +136,46 @@ python <renpy-dev>/scripts/tl_check.py <项目目录> --lang schinese --fix
 ```
 
 `{i}{/i}` 被机翻丢弃不崩，只是丢样式，可留在报告里人工决定。
+
+### 发行版自带 7.4.8：别用 8.x 专属 API（2026-10 SenseiOvernight 验证）
+旧作自带引擎常是 7.4.8，没有 `config.label_callbacks`（8.0+ 才加的列表形式），访问直接抛 `Exception: config.label_callbacks is not a known configuration variable.` 崩在 init；7.x 只有单数 `config.label_callback`，签名同为 `(label, abnormal)`。写补丁时用兼容分支：
+
+```renpy
+try:
+    config.label_callbacks.append(cb)   # 8.0+
+except Exception:                       # defaultstore.__getattr__ 抛的是 Exception, 不是 AttributeError
+    config.label_callback = cb          # 7.x
+```
+
+两个连带坑（同一个补丁里连着炸了三层，全是引擎版本差异）：
+- **label 回调在 init 阶段就会被触发**（`gui.init()` → `call_in_new_context("_style_reset")` 执行 init label），那时 `default` 变量尚未建立，回调里裸读 store 变量 → `AttributeError: 'StoreModule' object has no attribute ...`。回调内一律 `getattr(store, "name", 默认值)` 兜底 + 整体 try。
+- **`[]` 插值不支持算术表达式**：`text "[a+1]"` → `NameError: Name 'a+1' is not defined.`。先 `$ x = a + 1`，再 `text x`（直接接表达式最稳，连插值都省了）。
+
+用游戏自带引擎就地验证，不需要装 SDK（`lib/windows-x86_64/python.exe` 就是 py2.7 解释器）：
+
+```bash
+cd <游戏根目录>
+./lib/windows-x86_64/python.exe Sensei*.py . lint                        # 语法+init 阶段全跑
+SDL_VIDEODRIVER=windows ./lib/windows-x86_64/python.exe Sensei*.py . test <用例名>   # 跑界面
+```
+
+`test` 必须显式指定 `SDL_VIDEODRIVER=windows`，否则 SDL 回退 dummy 驱动，报 `OpenGL support is either not configured in SDL or not available`——那是验证环境的问题，不是游戏的问题。`pause 0.5` 之间 `renpy.show_screen` / `hide_screen` 即可确认界面能否渲染，用 `renpy.quit()` 结束。
+
+### 补丁给旧存档新增 default 变量 → 运行中 NameError（2026-10 SenseiOvernight 同日二次验证）
+补丁（悬浮按钮/目录类 MOD）新增 `default` 变量后，**载入补丁加入前的旧存档**会 `NameError: name 'xxx' is not defined`：7.4.8 的 default 重放是条件赋值（`set_default` 检查存档 pickle 里的 `ever_been_changed`），且悬浮 screen 挂在 `config.overlay_screens` 里每个 interact 都求值，必炸在剧情中途。三层防御：
+
+```renpy
+# 1. 读 store 变量一律安全读取, 别裸读
+def lm_get(name, default):
+    return getattr(renpy.store, name, default)
+
+# 2. after_load 回调显式补齐缺失变量
+config.after_load_callbacks.append(ensure_defaults)
+
+# 3. screen 名与 store 变量名不要同名 (screen lm_overlay + default lm_overlay 会纠缠)
+```
+
+内置值对象也会踩同一个坑：`VariableInputValue("x")` 的 `get_text()` 直接 `globals()[self.variable]`，变量缺失 → `KeyError`；渲染前 `renpy.store.__dict__.setdefault("x", "")` 兜底。`ToggleVariable` 同理不稳，自写 toggle 函数最稳。
+
+**发行前复现手法**：testcase 里 `$ renpy.store.__dict__.pop("变量", None)` 把相关变量删光再 `renpy.show_screen(...)`，就能在测试环境重现旧存档场景，不用真的找旧存档。
+

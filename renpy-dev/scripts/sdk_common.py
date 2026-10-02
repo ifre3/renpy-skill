@@ -11,9 +11,8 @@ import os
 import sys
 
 
-# 常见 SDK 安装路径（维护点：本机新装/升级 SDK 后在此追加一行即可）
+# 常见 SDK 安装路径（维护点：本机路径在此追加或直接设 RENPY_SDK 环境变量，勿提交个人路径）
 _KNOWN_SDK_PATHS = [
-    r"D:\workplace\renpy-8.5.3-sdk",
 ]
 
 

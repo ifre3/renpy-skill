@@ -1,0 +1,9 @@
+# patch_renpy_say.py 替换规则
+# 每行: filename,old_text,new_text
+# filename 是 basename（不含路径）
+# old_text 和 new_text 是文件中的精确行内容
+# 以 # 开头的行被忽略
+#
+# 示例：
+# globals.rpy,"{i}Your affection with " + character_name + " has increased to " + str(globals()[character_var_name]) + "...{/i}","{i}你对 " + character_name + " 的好感度提升至 " + str(globals()[character_var_name]) + "...{/i}"
+# sandbox_ch3.rpy,"Time to hit the hay...","该睡觉了……"
