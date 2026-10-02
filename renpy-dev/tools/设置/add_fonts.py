@@ -12,19 +12,19 @@ Ren'Py 字体添加脚本
 
 使用方法:
   # 添加单个字体文件 (自动识别 regular/bold)
-  python tools/add_fonts.py tmp/finaltest NotoSansSC-Regular.otf
+  python tools/add_fonts.py MyGame-1.0-pc NotoSansSC-Regular.otf
 
   # 添加多个字体文件
-  python tools/add_fonts.py tmp/finaltest NotoSansSC-Regular.otf NotoSansSC-Bold.otf
+  python tools/add_fonts.py MyGame-1.0-pc NotoSansSC-Regular.otf NotoSansSC-Bold.otf
 
   # 添加整个字体目录
-  python tools/add_fonts.py tmp/finaltest --dir path/to/fonts/
+  python tools/add_fonts.py MyGame-1.0-pc --dir path/to/fonts/
 
   # 指定字体角色 (cjk-regular / cjk-bold / default-regular / default-bold)
-  python tools/add_fonts.py tmp/finaltest myfont.ttf --role cjk-regular
+  python tools/add_fonts.py MyGame-1.0-pc myfont.ttf --role cjk-regular
 
   # 仅复制不更新配置
-  python tools/add_fonts.py tmp/finaltest myfont.ttf --no-update
+  python tools/add_fonts.py MyGame-1.0-pc myfont.ttf --no-update
 
 参数:
   项目路径          包含 game/ 目录的项目根路径
@@ -268,9 +268,9 @@ def main():
         description="为 Ren'Py 游戏添加字体文件",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="示例:\n"
-        "  python tools/add_fonts.py tmp/finaltest NotoSansSC-Regular.otf\n"
-        "  python tools/add_fonts.py tmp/finaltest --dir path/to/fonts/\n"
-        "  python tools/add_fonts.py tmp/finaltest myfont.ttf --role cjk-regular",
+        "  python tools/add_fonts.py MyGame-1.0-pc NotoSansSC-Regular.otf\n"
+        "  python tools/add_fonts.py MyGame-1.0-pc --dir path/to/fonts/\n"
+        "  python tools/add_fonts.py MyGame-1.0-pc myfont.ttf --role cjk-regular",
     )
     parser.add_argument("project", help="项目根路径 (包含 game/ 目录)")
     parser.add_argument("fonts", nargs="*", help="字体文件路径 (.ttf/.otf/.ttc)")

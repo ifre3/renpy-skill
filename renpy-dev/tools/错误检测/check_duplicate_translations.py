@@ -7,12 +7,12 @@ Ren'Py 不允许同一个 old 字符串在多个翻译文件中定义（即使�
 此脚本扫描 tl/<lang>/ 目录下的所有 翻译 .rpy 文件，检测重复条目并报告。
 
 用法:
-  python tools/check-duplicate-translations.py <游戏目录>
-  python tools/check-duplicate-translations.py <游戏目录> -l schinese
+  python tools/check_duplicate_translations.py <游戏目录>
+  python tools/check_duplicate_translations.py <游戏目录> -l schinese
 
 示例:
-  python check-duplicate-translations.py MyGame-1.0-pc
-  python check-duplicate-translations.py /path/to/MyGame-1.0-pc -l schinese
+  python check_duplicate_translations.py MyGame-1.0-pc
+  python check_duplicate_translations.py /path/to/MyGame-1.0-pc -l schinese
 """
 
 import argparse

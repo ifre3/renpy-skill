@@ -6,8 +6,8 @@ remove_translated.py - 移除文件名中所有叠加的 _translated 后缀
     python remove_translated.py <目录或文件路径> --execute   (实际执行)
 
 示例:
-    python remove_translated.py "D:/Games/MyGame"
-    python remove_translated.py "D:/Games/MyGame/cheats_translated_translated_translated.rpy" --execute
+    python remove_translated.py "MyGame-1.0-pc"
+    python remove_translated.py "MyGame-1.0-pc/cheats_translated_translated_translated.rpy" --execute
 """
 import os
 import sys

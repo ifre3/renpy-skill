@@ -15,8 +15,6 @@
 | `patch_renpy_say.py` | 修补 Python `renpy.say()` 硬编码英文 |
 | `fix_missing_tags.py` | 尝试修复丢失标签，低置信度项只生成人工清单 |
 
-> `translate_pipeline.py` 是兼容旧命令的薄转发层，功能已合并到 `autotranslate.py`。
-
 ## 推荐流程
 
 ```powershell

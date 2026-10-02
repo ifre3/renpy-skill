@@ -15,6 +15,11 @@
       - < 6英寸 → phone / small 变体（手机端字幕易截断）
       - ≥ 6英寸 → tablet / medium 变体（平板端显示正常）
     本脚本将逻辑改为始终使用 tablet / medium 变体。
+
+前提：
+    脚本按 <SDK>/renpy/main.py 的相对布局定位 SDK_DIR（取本文件上两级目录），
+    因此必须先拷贝到 Ren'Py SDK 根目录（或其下一级子目录）内运行，
+    直接在本 skill 的 tools/设置/ 下运行无法定位 SDK。
 """
 
 import os

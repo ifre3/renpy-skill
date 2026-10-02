@@ -1,22 +1,21 @@
 # renpy-tools 工具包边界与通用性（保守使用经验）
 
-> 位置 `<SDK>/tools/`。结论基于 2026-10-02 全源码审读（37 个 .py）。
+> 位置：skill 内置 `renpy-dev/tools/`（历史版本曾置于 `<SDK>/tools/`）。结论基于 2026-10-02 全源码审读。
 > 用法原则：**通用工具直接跑；半通用先看本页再调参；专用条目当经验用，不要当现成轮子。**
 
 ## 通用度分级
 
 - 【通用 20】`renpy-tools-cli` `tl_check` `check_charname_translation` `check_translation_integrity` `check_untranslated` `fix_translation_comments` `patch_renpy_say`(机制) `add_performance_panel` `patch_android_tablet` `remove_translated` `setup_i18n` `unrpyc` `check_auto_trans` `check_crash_risks` `check_duplicate_translations` `check_label_issues` `check_translation_misuse` `check_type_safety` `check_ui_text` `lint_check` —— 直接用。
-- 【半通用 11】`linear_mode` `unify_names_v2` `unify_name_translations` `autotranslate` `sync_namebox_translation` `add_fonts` `switch_default_language` `check_func_text` `check_button_missing_translation` `lint_report` `lint_rpy`
-- 【专用 2】`fix_missing_tags` `统一名称/deprecated/fix_name_inconsistencies`
+- 【半通用 10】`linear_mode` `unify_name_translations` `autotranslate` `sync_namebox_translation` `add_fonts` `switch_default_language` `check_func_text` `check_button_missing_translation` `lint_report` `lint_rpy`
+- 【专用 2】`fix_missing_tags`
 - 【基础设施】`公共/backup.py`(幂等 .bak+原子写, fail-closed) `公共/rpy_syntax.py` `错误检测/common.py`
 
 ## 半通用条目的保守经验
 
 | 工具 | 边界 | 保守做法 |
 |------|------|----------|
-| `linear_mode.py` / `ingame_gate.py` | **剧本门控（ingame_gate.py，推荐）**：把路由标签 if/jump 链简化成「totaldays 达标 && 本天未播」写回剧本（FriendshipClub 式节点门控，需授权改原文件；条件简化会丢弃前置 flag → 剧情连续性可能有小跳跃）。**悬浮补丁（linear_mode.py add）**：单开关 + 回调顶层重定向；菜单仍需手点、repeatable 长对话场景不跳。**modify 专用**：只认 `get_event_list` + `Event(id=)` 事件表（LostInYou 自有机制）。add 的场景推导含 LostInYou 式桩标签与 `script.rpy` 命名假设（`--min-says/--include/--exclude/--list` 校正） | 先 `analyze` 再选方式；路由链集中在单标签 → 用剧本门控；不想改原文件 → 悬浮补丁；有事件表 → modify |
-| `unify_names_v2.py` | 内置 KNOWN_VARIANTS 是 Tomori 系游戏的角色表（Tomori→灯里等），STOPWORDS/SKIP_FILES 同源 | 换游戏必须先清空/重写该表；优先用 v6 |
-| `unify_name_translations.py` (v6) | 核心通用（不猜测变体，全靠外部 glossary）；残留 SKIP_FILES 四个文件名、`DEFAULT_TL_DIR=game/tl/schinese` | 换游戏传 `--tl-dir`；SKIP_FILES 残留无害但注意 |
+| `linear_mode.py` | **剧本门控（经验做法，未内置脚本）**：把路由标签 if/jump 链简化成「totaldays 达标 && 本天未播」写回剧本（FriendshipClub 式节点门控，需授权改原文件；条件简化会丢弃前置 flag → 剧情连续性可能有小跳跃）。**悬浮补丁（linear_mode.py add）**：单开关 + 回调顶层重定向；菜单仍需手点、repeatable 长对话场景不跳。**modify 专用**：只认 `get_event_list` + `Event(id=)` 事件表（LostInYou 自有机制）。add 的场景推导含 LostInYou 式桩标签与 `script.rpy` 命名假设（`--min-says/--include/--exclude/--list` 校正） | 先 `analyze` 再选方式；路由链集中在单标签 → 用剧本门控（自行改写剧本，不要找现成脚本）；不想改原文件 → 悬浮补丁；有事件表 → modify |
+| `unify_name_translations.py` (v6) | 核心通用（不猜测变体，全靠外部 glossary）；残留 SKIP_FILES 四个文件名、`DEFAULT_TL_DIR=game/tl/schinese`。旧版 `unify_names_v2.py` 已移除 | 换游戏传 `--tl-dir`；SKIP_FILES 残留无害但注意 |
 | `autotranslate.py` | DEFAULT_CONFIG 不内置端点（`--api-url` 或环境变量 `RENPY_TRANSLATE_API_URL` 提供 OpenAI 兼容端点），`target_language="Simplified Chinese"` 默认简中，提示词是 Galgame 中文化专用 | 换语言对先改 DEFAULT_CONFIG；端点与密钥都走环境变量（`RENPY_TRANSLATE_API_URL` / `RENPY_TRANSLATE_API_KEY`） |
 | `sync_namebox_translation.py` | 默认目标 `script_translated.rpy`、术语表 `导出_术语表.xlsx` 是自家命名约定 | 永远先看试运行输出（默认不写，`--apply` 才落盘） |
 | `add_fonts.py` | 只认 setup_i18n 生成的 `fonts_common.rpy` 与 4 个自家 define 变量名 | 先跑 `setup_i18n.py`，否则拒绝写入是预期行为 |
@@ -27,7 +26,7 @@
 ## 专用条目（当经验，不当工具）
 
 - `fix_missing_tags.py`：框架（丢失标签 A-F 分类 + manual_fixes.json 流程）可复用，但 MANUAL_OVERRIDES 49 条 (文件,行号)、ITALIC_MAP 全部绑定 Tomori 系项目。换游戏只把它当 dry-run 报告生成器，逐条人工处理。
-- `统一名称/deprecated/fix_name_inconsistencies.py`：已废弃，三重绑定（角色表 + `c_xxx` 变量命名假设 + 硬编码 `translate schinese strings:`），不要再用；用 v6。
+- 历史脚本 `unify_names_v2.py`、`fix_name_inconsistencies.py`（deprecated）已于 2026-10-03 移除：均绑定特定游戏角色表，人名统一一律用 `unify_name_translations.py` (v6)。
 
 ## 写操作风险表（2026-10-02 P1 修补后）
 

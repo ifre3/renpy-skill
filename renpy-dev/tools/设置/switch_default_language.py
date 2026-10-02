@@ -11,16 +11,16 @@ Ren'Py 默认语言切换脚本
 
 使用方法:
   # 设置默认语言为简体中文
-  python tools/switch_default_language.py tmp/finaltest schinese
+  python tools/switch_default_language.py MyGame-1.0-pc schinese
 
   # 设置默认语言为英文 (即不翻译)
-  python tools/switch_default_language.py tmp/finaltest english
+  python tools/switch_default_language.py MyGame-1.0-pc english
 
   # 查看当前配置
-  python tools/switch_default_language.py tmp/finaltest --show
+  python tools/switch_default_language.py MyGame-1.0-pc --show
 
   # 列出可用语言
-  python tools/switch_default_language.py tmp/finaltest --list
+  python tools/switch_default_language.py MyGame-1.0-pc --list
 
 参数:
   项目路径          包含 game/ 目录的项目根路径
@@ -300,10 +300,10 @@ def main():
         description="切换 Ren'Py 游戏的默认语言",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="示例:\n"
-        "  python tools/switch_default_language.py tmp/finaltest schinese\n"
-        "  python tools/switch_default_language.py tmp/finaltest english\n"
-        "  python tools/switch_default_language.py tmp/finaltest --show\n"
-        "  python tools/switch_default_language.py tmp/finaltest --list",
+        "  python tools/switch_default_language.py MyGame-1.0-pc schinese\n"
+        "  python tools/switch_default_language.py MyGame-1.0-pc english\n"
+        "  python tools/switch_default_language.py MyGame-1.0-pc --show\n"
+        "  python tools/switch_default_language.py MyGame-1.0-pc --list",
     )
     parser.add_argument("project", help="项目根路径 (包含 game/ 目录)")
     parser.add_argument("language", nargs="?", help="要设为默认的语言代码")

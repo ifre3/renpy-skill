@@ -26,12 +26,12 @@
   - 支持下划线与括号间有空格的写法: _ ("text")
 
 用法:
-  python tools/check-button-missing-translation.py <游戏目录>
-  python tools/check-button-missing-translation.py <游戏目录> -l schinese -o report.txt
+  python tools/check_button_missing_translation.py <游戏目录>
+  python tools/check_button_missing_translation.py <游戏目录> -l schinese -o report.txt
 
 示例:
-  python tools/check-button-missing-translation.py MyGame-1.0-pc
-  python check-button-missing-translation.py /path/to/MyGame-1.0-pc
+  python tools/check_button_missing_translation.py MyGame-1.0-pc
+  python check_button_missing_translation.py /path/to/MyGame-1.0-pc
 """
 
 import argparse

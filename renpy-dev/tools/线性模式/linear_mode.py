@@ -26,7 +26,7 @@
 用法示例:
     python linear_mode.py analyze "D:/games/MyGame-1.0-pc"
     python linear_mode.py add "D:/games/MyGame-1.0-pc"
-    python linear_mode.py modify "D:/games/LostInYou-0.16.1-pc" --csv events.csv
+    python linear_mode.py modify "D:/games/MyGame-1.0-pc" --csv events.csv
 """
 
 import argparse
@@ -965,7 +965,7 @@ def main(argv=None):
         epilog="示例:\n"
                "  python linear_mode.py analyze MyGame-1.0-pc\n"
                "  python linear_mode.py add MyGame-1.0-pc --min-says 3\n"
-               "  python linear_mode.py modify LostInYou-pc --csv events.csv\n",
+               "  python linear_mode.py modify MyGame-pc --csv events.csv\n",
     )
     sub = ap.add_subparsers(dest="cmd")
 

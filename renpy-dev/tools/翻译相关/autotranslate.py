@@ -3,7 +3,7 @@
 """
 autotranslate.py — Ren'Py TL 增量批量翻译工具（统一管线）
 
-合并了 autotranslate 与 translate_pipeline 的全部能力:
+能力一览:
     - 增量: 只翻译空条目，跳过已翻译；--skip-same 跳过原文=译文
     - 批量: 按字符数分批（默认 ~1000 字符/批），不截断句子
     - 断点续传: 缓存进度，中断后再次运行从未完成处继续

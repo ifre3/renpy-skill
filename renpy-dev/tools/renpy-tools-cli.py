@@ -23,6 +23,8 @@ TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 CHECK_DIR = os.path.join(TOOLS_DIR, "错误检测")
 TRANSLATE_DIR = os.path.join(TOOLS_DIR, "翻译相关")
 LINEAR_DIR = os.path.join(TOOLS_DIR, "线性模式")
+SETUP_DIR = os.path.join(TOOLS_DIR, "设置")
+SCRIPTS_DIR = os.path.join(TOOLS_DIR, "..", "scripts")
 PYTHON = sys.executable
 
 TOOL_SCRIPTS = {
@@ -41,6 +43,16 @@ TOOL_SCRIPTS = {
     "namebox": os.path.join(TRANSLATE_DIR, "sync_namebox_translation.py"),
     "crash": os.path.join(CHECK_DIR, "check_crash_risks.py"),
     "linear": os.path.join(LINEAR_DIR, "linear_mode.py"),
+    "fixtags": os.path.join(TRANSLATE_DIR, "fix_missing_tags.py"),
+    "fixcomments": os.path.join(TRANSLATE_DIR, "fix_translation_comments.py"),
+    "patchsay": os.path.join(TRANSLATE_DIR, "patch_renpy_say.py"),
+    "i18n": os.path.join(SCRIPTS_DIR, "setup_i18n.py"),
+    "lang": os.path.join(SETUP_DIR, "switch_default_language.py"),
+    "fonts": os.path.join(SETUP_DIR, "add_fonts.py"),
+    "perfpanel": os.path.join(SETUP_DIR, "add_performance_panel.py"),
+    "rmsuffix": os.path.join(SETUP_DIR, "remove_translated.py"),
+    "unrpyc": os.path.join(SETUP_DIR, "unrpyc.py"),
+    "tablet": os.path.join(SETUP_DIR, "patch_android_tablet.py"),
 }
 
 TOOL_DESC = {
@@ -59,10 +71,22 @@ TOOL_DESC = {
     "namebox": "同步角色名字框翻译（按术语表）",
     "crash": "检测运行时崩溃风险",
     "linear": "线性模式: analyze 分析 / add 生成补丁 / modify 校验事件表",
+    "fixtags": "尝试修复丢失的文本标签（低置信度只生成人工清单）",
+    "fixcomments": "翻译注释中的术语反向恢复为英文原文",
+    "patchsay": "修补 renpy.say() 硬编码英文（按 补丁集/renpy_say_replacements.csv）",
+    "i18n": "多语言初始化（重构版，位于 ../scripts/setup_i18n.py）",
+    "lang": "切换默认语言（需先跑 i18n）",
+    "fonts": "添加字体（需先跑 i18n 生成 fonts_common.rpy）",
+    "perfpanel": "添加/移除性能浮层（--remove）",
+    "rmsuffix": "移除文件名 _translated 重复后缀",
+    "unrpyc": "下载 unrpyc 并反编译 .rpyc",
+    "tablet": "安卓平板变体强制补丁（需拷入 SDK 内运行）",
 }
 
 CHECK_GROUP = ["ui", "misuse", "func", "auto", "charname"]
 CRASH_GROUP = ["crash"]
+FIX_GROUP = ["fixtags", "fixcomments", "patchsay"]
+SETUP_GROUP = ["i18n", "lang", "fonts", "perfpanel", "rmsuffix", "unrpyc", "tablet"]
 
 
 def run_script(name, args):
@@ -104,13 +128,18 @@ def main(argv=None):
             print("[ERROR] list 命令不接受额外参数")
             return 2
         print("Ren'Py 翻译工具集\n")
-        print("检查类:")
+        print("检查类 (只读):")
         for name, desc in TOOL_DESC.items():
             if name in CHECK_GROUP or name in CRASH_GROUP:
                 print(f"  {name:14s} {desc}")
+        print("\n修补/写入类 (默认试运行，--apply/--execute 才落盘):")
+        for name, desc in TOOL_DESC.items():
+            if name in FIX_GROUP or name in SETUP_GROUP:
+                print(f"  {name:14s} {desc}")
         print("\n其他:")
         for name, desc in TOOL_DESC.items():
-            if name not in CHECK_GROUP and name not in CRASH_GROUP:
+            if name not in CHECK_GROUP and name not in CRASH_GROUP \
+                    and name not in FIX_GROUP and name not in SETUP_GROUP:
                 print(f"  {name:14s} {desc}")
         print("\n批量: python renpy-tools-cli.py all <项目目录> [子脚本参数...]")
         return 0

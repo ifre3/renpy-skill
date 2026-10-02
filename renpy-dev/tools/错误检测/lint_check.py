@@ -7,12 +7,12 @@ Phase 1: 调用 renpy SDK 内置 lint（含 --check-unclosed-tags 等选项）
 Phase 2: 翻译专项检查（未翻译条目、空翻译）
 
 用法:
-  python tools/lint_translations.py <游戏目录> --sdk <SDK路径>
-  python tools/lint_translations.py <游戏目录> --sdk <SDK路径> -l schinese
-  python tools/lint_translations.py <游戏目录> --skip-sdk-lint  # 只做翻译专项检查
+  python tools/lint_check.py <游戏目录> --sdk <SDK路径>
+  python tools/lint_check.py <游戏目录> --sdk <SDK路径> -l schinese
+  python tools/lint_check.py <游戏目录> --skip-sdk-lint  # 只做翻译专项检查
 
 示例:
-  python lint_translations.py MyGame-1.0-pc --sdk /path/to/renpy-sdk
+  python lint_check.py MyGame-1.0-pc --sdk /path/to/renpy-sdk
 """
 
 import argparse
@@ -235,8 +235,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python lint_translations.py MyGame-1.0-pc --sdk /path/to/renpy-sdk
-  python lint_translations.py MyGame-1.0-pc -l schinese --skip-sdk-lint
+  python lint_check.py MyGame-1.0-pc --sdk /path/to/renpy-sdk
+  python lint_check.py MyGame-1.0-pc -l schinese --skip-sdk-lint
         """
     )
     ap.add_argument("project", help="游戏目录（含 game/ 子目录）")

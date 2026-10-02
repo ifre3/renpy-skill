@@ -13,16 +13,16 @@ Ren'Py 性能面板添加脚本
 
 使用方法:
   # 添加性能面板 (默认快捷键 p)
-  python tools/add_performance_panel.py tmp/finaltest
+  python tools/add_performance_panel.py MyGame-1.0-pc
 
   # 指定快捷键
-  python tools/add_performance_panel.py tmp/finaltest --key F8
+  python tools/add_performance_panel.py MyGame-1.0-pc --key F8
 
   # 覆盖已存在的面板
-  python tools/add_performance_panel.py tmp/finaltest --force
+  python tools/add_performance_panel.py MyGame-1.0-pc --force
 
   # 移除性能面板
-  python tools/add_performance_panel.py tmp/finaltest --remove
+  python tools/add_performance_panel.py MyGame-1.0-pc --remove
 
 参数:
   项目路径          包含 game/ 目录的项目根路径
@@ -357,10 +357,10 @@ def main():
         description="为 Ren'Py 游戏添加可调节的性能面板",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="示例:\n"
-        "  python tools/add_performance_panel.py tmp/finaltest\n"
-        "  python tools/add_performance_panel.py tmp/finaltest --key F8\n"
-        "  python tools/add_performance_panel.py tmp/finaltest --force\n"
-        "  python tools/add_performance_panel.py tmp/finaltest --remove",
+        "  python tools/add_performance_panel.py MyGame-1.0-pc\n"
+        "  python tools/add_performance_panel.py MyGame-1.0-pc --key F8\n"
+        "  python tools/add_performance_panel.py MyGame-1.0-pc --force\n"
+        "  python tools/add_performance_panel.py MyGame-1.0-pc --remove",
     )
     parser.add_argument("project", help="项目根路径 (包含 game/ 目录)")
     parser.add_argument(

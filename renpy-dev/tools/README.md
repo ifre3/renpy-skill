@@ -4,7 +4,7 @@
 > 零绝对路径，整体拷贝即可用。SDK 仅 `lint` 子命令需要（会经 `sdk_common.detect_sdk()` 定位）。
 >
 > 去重说明：翻译文件静态质检用 `../scripts/tl_check.py`（v3，问题分级，已取代本目录旧 v2）；
-> `设置/setup_i18n.py` 是本套件的原始版本，`../scripts/setup_i18n.py` 是重构版，二选一即可。
+> 多语言初始化统一用 `../scripts/setup_i18n.py`（重构版，本目录原始版已移除）。
 
 > 工具定位是修补检测，不代替专门翻译打包软件。
 
@@ -55,6 +55,7 @@ tools/
 ├── patch_android_tablet.bat            🖥️ 安卓平板模式打包 (双击运行)
 ├── README.md / LICENSE                 📄 项目说明与许可
 ├── 错误检测/                            🔍 翻译质量检查与审计
+│   ├── README.md                       ── 本组用法速览
 │   ├── common.py                       ── 共享模块 (编码/输出/翻译加载)
 │   ├── check_ui_text.py                ── screen UI 文本缺少 _()
 │   ├── check_translation_misuse.py     ── Bug: Character[var] 缺 !t / 翻译函数误用
@@ -73,31 +74,32 @@ tools/
 │   ├── RenPy汉化常见问题手册.md         ── 汉化常见问题完整手册
 │   ├── RenPy_AI翻译常见问题诊断与解决方案.md ── AI 翻译问题诊断方案
 │   ├── crash_detection_20260629.md      ── 崩溃检测脚本开发总结
-│   ├── p3_split_and_cli_20260629.md     ── P3 任务报告：CLI 拆分
-│   ├── tep技能设计.txt                  ── 技能流程设计笔记
-│   └── 常见问题罗列.txt                 ── AI 翻译常见问题清单
+│   └── p3_split_and_cli_20260629.md     ── P3 任务报告：CLI 拆分
 ├── 翻译相关/                            🌐 翻译操作与修补
+│   ├── README.md                       ── 本组用法与安全规则
 │   ├── check_translation_integrity.py  ── 翻译完整性: 角色/任意表达式/标签结构/转义
 │   ├── check_untranslated.py           ── 智能未翻译检测 (支持 --csv 导出)
+│   ├── check_charname_translation.py   ── 角色名字框完整性审计 (可 --stub 生成骨架)
 │   ├── autotranslate.py                ── AI 翻译流水线 (扫描→翻译→应用)
 │   ├── sync_namebox_translation.py     ── 角色名字框同步 (Character → translate strings)
 │   ├── patch_renpy_say.py              🔧 修补 Python renpy.say() 硬编码英文
+│   ├── patch_renpy_say_说明.md         ── 上述工具用法说明
 │   ├── fix_missing_tags.py             ── 修复翻译中丢失的文本标签
 │   └── fix_translation_comments.py     ── 修复翻译注释行
 ├── 统一名称/                            🏷️ 人名翻译统一
-│   ├── unify_name_translations.py      ── v6 主流程 (匹配→审核→统一)
-│   ├── unify_names_v2.py               ── v2 频率统计 (deprecated)
-│   └── deprecated/                     ── 已弃用脚本
+│   ├── README.md                       ── v6 三步流程说明与术语表格式
+│   └── unify_name_translations.py      ── v6 主流程 (收集→分类→统一)
 ├── 线性模式/                            🎬 剧情线性模式
 │   ├── linear_mode.py                  ── analyze 分析 / add 生成补丁 / modify 校验事件表
 │   └── README.md                       ── 用法与边界说明
 ├── 设置/                                ⚙️ 项目配置
-│   ├── setup_i18n.py                   ── 多语言初始化
 │   ├── switch_default_language.py      ── 切换默认语言
 │   ├── add_fonts.py                    ── 字体添加
 │   ├── add_performance_panel.py        ── 性能面板
 │   ├── remove_translated.py            🧹 移除文件名 _translated 重复后缀
-│   └── patch_android_tablet.py         ── 安卓平板适配补丁
+│   ├── remove_translated_说明.md       ── 上述工具用法说明
+│   ├── patch_android_tablet.py         ── 安卓平板适配补丁 (需拷入 SDK 内运行)
+│   └── unrpyc.py                       ── 下载 unrpyc 并反编译 .rpyc
 ├── 公共/                                💾 共享模块
 │   ├── backup.py                       ── 首次 .bak + 原子写入
 │   └── rpy_syntax.py                   ── Ren'Py 翻译条目/字符串/插值解析
@@ -110,7 +112,7 @@ tools/
 ## 典型工作流
 
 ```
-1. python 设置/setup_i18n.py ...                 → 初始化多语言
+1. python ../scripts/setup_i18n.py ...           → 初始化多语言
 2. python renpy-tools-cli.py all <项目>          → 一键检测
 3. python 翻译相关/check_translation_integrity.py <项目>
 4. python 翻译相关/check_untranslated.py <tl目录> --csv

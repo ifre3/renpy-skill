@@ -4,12 +4,12 @@
 unrpyc 反编译 —— 下载 unrpyc 源码后直接 import 反编译 Ren'Py 游戏 .rpyc 文件。
 
 用法:
-  python tools/unrpyc/unrpyc.py <项目目录>
-  python tools/unrpyc/unrpyc.py <项目目录> -c             # 覆盖已有 .rpy
-  python tools/unrpyc/unrpyc.py <项目目录> -t schinese    # 用中文翻译替换对话
-  python tools/unrpyc/unrpyc.py <项目目录> --try-harder   # 反混淆
-  python tools/unrpyc/unrpyc.py <项目目录> -p 4           # 4 线程并行
-  python tools/unrpyc/unrpyc.py --status                  # 查看本地状态
+  python tools/设置/unrpyc.py <项目目录>
+  python tools/设置/unrpyc.py <项目目录> -c             # 覆盖已有 .rpy
+  python tools/设置/unrpyc.py <项目目录> -t schinese    # 用中文翻译替换对话
+  python tools/设置/unrpyc.py <项目目录> --try-harder   # 反混淆
+  python tools/设置/unrpyc.py <项目目录> -p 4           # 4 线程并行
+  python tools/设置/unrpyc.py --status                  # 查看本地状态
 """
 
 import argparse
@@ -232,7 +232,7 @@ def main():
                 pass
             print(green(f"? unrpyc 本地已就绪 ({version})"))
         else:
-            print(yellow("? unrpyc 未下载，运行以下命令自动下载:\n    python tools/unrpyc/unrpyc.py <项目目录>"))
+            print(yellow("? unrpyc 未下载，运行以下命令自动下载:\n    python tools/设置/unrpyc.py <项目目录>"))
         return
 
     # ── 确保源码 ──
