@@ -40,6 +40,10 @@ label after_load:
     return
 ```
 
+- 回调有两处挂点（8.5+）：`config.after_load_callbacks`（读档后，做实际迁移）、`config.before_load_callbacks`（读档前，适合提示"正在升级存档"）
+- **回滚到迁移前的旧存档会重新触发迁移代码** → 迁移逻辑必须幂等（重复执行无副作用），否则玩家一按 Ctrl 就炸
+- 迁移代码不要用 `exec()` 执行字符串（注入面 + traceback 不可读）；版本比较别用字符串（`"0.10" < "0.9"` 按字典序为 True），拆成 int 元组比
+
 ## Screen 刷新
 
 - screen 每秒刷新多次（约 30-60fps）

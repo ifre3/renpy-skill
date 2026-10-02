@@ -365,3 +365,46 @@ define config.rollback_enabled = True  # 启用回滚（暴露序列化问题）
 # define config.developer = False
 # define config.debug_sound = False
 ```
+
+---
+
+## 十、发布版容错配置（发行期兜底，调试期禁用）
+
+与第九节相反的一套：开发期要**暴露**错误，发行期要**兜底**。让玩家在缺资源、缺 label、旧存档损坏时看到友好提示而不是 traceback。配置项均对 Ren'Py 8.5.3 源码校对过。
+
+```renpy
+# ── 1. 异常处理钩子：按异常类型选择性吞掉（⚠️ 会掩盖 bug，开发期严禁启用）──
+init python:
+    def _release_handler(*args):
+        # 返回 True = 异常已处理，不再弹出错误界面
+        for p in ("NameError", "KeyError", "IndexError"):
+            if p in str(args[0]):
+                renpy.notify("遇到小问题，已自动跳过。")
+                return True
+        return False
+    # config.exception_handler = _release_handler   # ← 只在发行版启用
+
+# ── 2. 存档加载失败兜底：读档崩溃时走这个 label，而不是白屏/崩溃 ──
+label load_failed:
+    "存档版本过旧，无法读取，已返回主菜单。"
+    jump start
+
+init python:
+    config.load_failed_label = "load_failed"
+    config.save_dump = True                 # 存档内容转储，便于排查存档问题
+    config.after_load_transition = dissolve # 读档过渡画面
+
+# ── 3. 缺失内容兜底：返回替代目标；返回 None = 放弃兜底（保持默认崩溃行为）──
+init python:
+    config.missing_label_callback = lambda name: "missing_label"    # 返回存在的 label 名
+    # config.missing_image_callback = lambda name: <可显示的 Image 对象或 None>
+
+label missing_label:
+    "剧情跳转到了未完成的部分。"
+    jump start
+```
+
+要点：
+- `missing_label_callback` 返回的 label **必须真实存在**，否则二次崩
+- `config.exception_handler` 一旦启用会掩盖真 bug，只在发布候选版开启，且返回 True 前先 `renpy.log()` 记录
+- 这套与 `config.developer = True` 互斥：开发期暴露，发行期兜底

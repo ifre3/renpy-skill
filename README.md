@@ -33,6 +33,7 @@
 - 外部引用核对：补充 unrpyc 对 Ren'Py 8.5 的支持边界（PR #265）、rpycdec 对 8.4+ 的兼容问题、unrpa 对新 RPA-3.0 档案的解析问题；rpatool 规范源头迁移至 Codeberg；替换失效的 GitHub 加速镜像。
 - 精简：tl_check 描述去重；`snippets.md` 重构为陷阱速查（405 行 → 78 行）；`debugging.md` 报错对照表与开发者菜单说明压缩。
 - 隐私清理：SDK 本机路径、翻译服务端点、含用户名的示例路径全部移出仓库，改由环境变量与本地配置提供。
+- 收割 v0.3.2 旧架构线残值：analyze.py 新增 styles / layeredimages / defaults / show_refs 扫描类别与临时目录排除；debugging.md 补发布版容错配置清单；gotchas 补存档迁移回调与幂等要求。旧架构代码（bridge/scaffold/patterns/export/diagnose）经评估不合并，远端分支已删除。
 
 ### 2026-09-30 整合
 
