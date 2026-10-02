@@ -22,7 +22,7 @@ metadata:
 | `scripts/setup_fonts.py` | 字体适配（detect 检测 / config 生成配置 / fallback 回退链 / list 推荐） | `python scripts/setup_fonts.py detect --path <项目路径>` |
 | `scripts/setup_i18n.py` | 多语言基础设施（生成 tl/ 目录、语言 Screen、字体配置，不含翻译内容） | `python scripts/setup_i18n.py --path <项目路径> --lang zh en ja` |
 | `scripts/optimize_assets.py` | 批量压缩图片/音频减小包体积（pngquant/jpegoptim/ffmpeg 缺失时自动降级为复制） | `python scripts/optimize_assets.py --input ./game/images --output ./out` |
-| `scripts/tl_check.py` | tl 翻译文件质检（格式串损坏/插值变量被翻/{}标签/空译文，`--fix` 修机械性问题，修前先备份） | `python scripts/tl_check.py <项目路径> --lang schinese [--fix]` |
+| `scripts/tl_check.py` | tl 翻译文件质检 v3（三级报告 + `--fix`。分级细则与崩溃边界是独有知识，**唯一完整出处 = 下方注意事项 tl_check 行**，此处不重复） | `python scripts/tl_check.py <项目路径> --lang schinese [--fix] [--max-examples N]` |
 
 ## Trigger 关键词
 
@@ -47,11 +47,12 @@ python scripts/check_assets.py --path "D:/my_game"  # 资源缺失/孤设
 
 | 场景 | 说明 |
 |------|------|
-| **项目体检（优先用现成工具）** | renpy-tools 工具包（位于 `<SDK>/tools/`）统一入口：`python <SDK>/tools/renpy-tools-cli.py all <项目> -l schinese`。子命令：`crash` 崩溃风险、`untranslated` 空译文、`charname` 名字框漏译、`integrity` 变量/标签完整性、`label` 标签问题、`all` 全跑。`<SDK>` 用 `sdk_common.detect_sdk()` 解析（环境变量 `RENPY_SDK` 最优先）；找不到工具包时提示用户安装，不要现写替代品。闪退/缺句/名字英文先跑这个 |
-| **翻译文件质检（tl 侧唯一工具）** | 上面工具跳过 tl 目录；用**内置**的 `python scripts/tl_check.py <项目> --lang schinese [--fix]` 查翻译侧四种崩溃/显示隐患：`%(...)s` 丢类型字符（`ValueError: unsupported format character` 秒崩）、插值变量名被机翻（`[text]→[文本]`）、`{}` 标签损坏、空译文。`--fix` 自动修机械性问题（修前先备份） |
+| **项目体检（优先用现成工具）** | renpy-tools 工具包（**已内置 skill：`renpy-dev/tools/`**，纯标准库零依赖）统一入口：`python <skill>/renpy-dev/tools/renpy-tools-cli.py all <项目> -l schinese`。子命令：`crash` 崩溃风险、`untranslated` 空译文、`charname` 名字框漏译、`integrity` 变量/标签完整性、`label` 标签问题、`all` 全跑；仅 `lint` 子命令需要 SDK（`sdk_common.detect_sdk()` 解析）。闪退/缺句/名字英文先跑这个 |
+| **翻译文件质检（tl 侧唯一工具）** | 上面工具跳过 tl 目录；用**内置**的 `python scripts/tl_check.py <项目> --lang schinese [--fix]` 查翻译侧隐患，按级别输出：**崩溃级**（未知文本标签、关闭无开放标签、不接受关闭的标签、未闭合大括号、`%(...)s` 丢类型字符——引擎在 `config.safe_text=False`（默认）时显示到该行直接 raise；工具会读取项目配置自动降级）、**显示级**（`{}` 标签新旧不一致、全角伪标签 `【i】`、空译文、`[]` 插值不匹配）、**提示级**（new==old 的未翻译行，不含在退出码里）。v3 按引擎源码模拟：标签大小写敏感、花括号内空格不剥离。`--fix` 自动修机械性问题（`%(变量名被翻)` 还原、`{ i }`/`{/B}` 规范化）；输出行号是**译文行**，直接定位要改的行。**⚠️ `[]插值不匹配` 虽归显示级，但"变量被改名/多出未定义变量"（`[totaldays]`→`[总天数]`、人名写成 `[Tora]`）引擎同样 KeyError 崩溃，按崩溃级处理：还原变量名或删掉方括号；译文裸 `%`（`50%都是油`）在 safe_text=False 下也崩，写 `%%`。另：发行版常把 .mp3/.ttf 直接放 game/ 根目录，check_assets 已扫描根目录 |
 | 反编译 .rpyc / 提台词 / 剧情地图 | 用已装的 **renpy-script-decompile** 技能（无需 unrpyc，纯 Python 解 slot + pickle stub） |
 | SDK 路径 | 自动检测（`sdk_common.py`）：`sdk_path=` 参数 → 环境变量 `RENPY_SDK` → 向上查找 → 已知路径；本机新装 SDK 只需在 `_KNOWN_SDK_PATHS` 追加一行 |
 | 错误诊断 | **没有诊断脚本**——把 log.txt/traceback 直接给 AI 判读即可，比正则匹配准 |
+| **旧引擎发行版（装不了 SDK 时）** | 别用本 skill 的 SDK CLI 判版本兼容——≥8.0 的 lint 会把 `config.label_callbacks` 当合法，掩盖 7.x 崩溃。改用**游戏自带引擎**就地验证：`cd <游戏根目录> && ./lib/windows-x86_64/python.exe <启动脚本>.py . lint`（发行版 `lib/<平台>/python.exe` 就是完整解释器，还支持 `test <用例>` 跑界面；**跑 test 必须加 `SDL_VIDEODRIVER=windows`**，否则 dummy 驱动无 OpenGL 报错，属环境问题非游戏问题）。版本兼容坑见 [renpy-user/references/renpy_gotchas.md](../renpy-user/references/renpy_gotchas.md) |
 | 测试 | 没有测试脚本——Ren'Py testcase 语法（`run`/`click`/`advance until screen`/`assert eval`）AI 直接写在 .rpy 里，用 `renpy.py 项目 test` 执行 |
 | 存档/解包/汉化补丁 | 玩家侧需求 → 加载 **renpy-user** 的 `references/player_tools.md` |
 | 游戏内容 | 需要写剧情/设画面/加系统？→ 加载 **renpy-user** Skill |
@@ -60,6 +61,8 @@ python scripts/check_assets.py --path "D:/my_game"  # 资源缺失/孤设
 ## 进阶参考
 
 [SDK 配置 & CLI 命令速查](references/sdk_config.md) — 自动检测逻辑、全部 CLI 命令
+
+[renpy-tools 工具包边界](references/tools_boundaries.md) — 各工具通用度分级（通用/半通用/专用）、写操作风险表、引擎版本经验；半通用工具换游戏前先看这页
 
 [剧本 → 脚本工作流](references/text2script_workflow.md) — 原始剧本转 .rpy 的拆分/命名/演出注释规范，及资产文档格式
 

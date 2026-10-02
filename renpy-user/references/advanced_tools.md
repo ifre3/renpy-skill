@@ -151,6 +151,8 @@ python decompiler/astdump.py script.rpyc > ast_output.txt
 | master (v2.x) | Python 3.9+ | Ren'Py 8.x ~ 6.18.0 |
 | legacy (v1.x) | Python 2.7 | Ren'Py 7.x ~ 6.x |
 
+> **2026-10 版本边界**：master 对 Ren'Py **8.5** 字节码的支持仍在 [PR #265](https://github.com/CensoredUsername/unrpyc/pull/265)，截至 2026-10 未确认合入 master（master 已验证到 8.4）。8.5 编译的游戏反编译失败时，优先改用本机已装的 **renpy-script-decompile** 技能。
+
 ### 输出
 - 反编译后的 `.rpy` 文件生成在**原 `.rpyc` 同目录**下
 - 保留原始代码逻辑和注释（如果有的话）
@@ -163,8 +165,9 @@ python decompiler/astdump.py script.rpyc > ast_output.txt
 
 | 工具 | 功能 | 地址 |
 |------|------|------|
-| **rpatool** | RPA 创建/解包/删除/追加，支持 v2/v3 | https://github.com/galaxysd/rpatool |
-| **unrpa** | 只解包，更轻量 | https://github.com/Lattyware/unrpa |
+| **rpatool** | RPA 创建/解包/删除/追加，支持 v2/v3（规范源头 shizmob，**已迁 Codeberg，GitHub 侧停更**：https://codeberg.org/shizmob/rpatool ） | https://github.com/shizmob/rpatool |
+| **rpa-toolkit** | .rpa/.rpi 解包/创建 + .rpyc/.rpymc 反编译，活跃维护的现代替代 | https://github.com/regiellis/rpa-toolkit |
+| **unrpa** | 只解包，更轻量（⚠️ 2025 起新游戏的 RPA-3.0 档案有解析失败报告，见其 issue #50；失败改用 rpycdec unrpa 或 rpa-toolkit） | https://github.com/Lattyware/unrpa |
 | **rpaExtract** | Windows GUI 工具 | renpy.cn 论坛 |
 
 ### rpatool 使用
@@ -273,13 +276,13 @@ archive.rpa
 | renpy.cn 国内网盘汇总 | https://www.renpy.cn/thread-50-1-1.html | 蓝奏云/百度云等，更新到 2021.03 停更 |
 | GitHub Releases | https://github.com/renpy/renpy/releases | 走 ghproxy 镜像可加速 |
 
-推荐方式：从 GitHub Releases 下载，配合代理：
+推荐方式：从 GitHub Releases 下载，配合代理（最新稳定版以 https://www.renpy.org/release_list.html 为准，2026-10 为 8.5.3）：
 
 ```
 # 原地址
-https://github.com/renpy/renpy/releases/download/8.3.4/renpy-8.3.4-sdk.7z
-# ghproxy 代理（推荐，稳定）
-https://mirror.ghproxy.com/https://github.com/renpy/renpy/releases/download/8.3.4/renpy-8.3.4-sdk.7z
+https://github.com/renpy/renpy/releases/download/8.5.3/renpy-8.5.3-sdk.7z
+# 加速代理（当前存活实例；代理经常变动，先查聚合页 https://ghproxy.link）
+https://ghproxy.net/https://github.com/renpy/renpy/releases/download/8.5.3/renpy-8.5.3-sdk.7z
 ```
 
 Ren'Py 中文文档国内直连：
@@ -362,7 +365,6 @@ allprojects {
 | 清华大学 | `https://pypi.tuna.tsinghua.edu.cn/simple` |
 | 阿里云 | `http://mirrors.aliyun.com/pypi/simple/` |
 | 中科大 | `https://pypi.mirrors.ustc.edu.cn/simple/` |
-| 豆瓣 | `http://pypi.douban.com/simple/` |
 
 临时使用：
 ```bash
@@ -377,7 +379,9 @@ index-url = https://pypi.tuna.tsinghua.edu.cn/simple
 trusted-host = pypi.tuna.tsinghua.edu.cn
 ```
 
-### 7.4 Android SDK Manager 镜像
+### 7.4 Android SDK Manager 镜像（已过时，仅存档）
+
+> ⚠️ 本节镜像约为 2016 年代产物，**现已基本失效**。现代做法：直连官方源 + 系统代理，或本地加速工具（Watt Toolkit / FastGithub）。
 
 Android Studio → Preferences → Appearance & Behavior → System Settings → Android SDK → 设置代理：
 
@@ -400,14 +404,13 @@ HTTP Proxy Port: 80
 # 原链接
 https://github.com/user/repo/releases/download/v1.0/file.zip
 
-# ghproxy 代理（推荐）
-https://mirror.ghproxy.com/https://github.com/user/repo/releases/download/v1.0/file.zip
-
-# FastGit（偶尔可用）
-https://hub.fastgit.xyz/user/repo/releases/download/v1.0/file.zip
+# 加速代理（ghproxy.net / gh-proxy.com 当前存活；实例经常变动，先查聚合页 https://ghproxy.link）
+https://ghproxy.net/https://github.com/user/repo/releases/download/v1.0/file.zip
 ```
 
 适用：Ren'Py SDK / rpatool / unrpyc / 字体文件 等所有 GitHub 资源。
+
+> **已死的旧方案，网上旧教程仍在传，别用**：`mirror.ghproxy.com`（域名被拿下）、`hub.fastgit.xyz`（FastGit 已停服）。免费镜像易死，下载失败先到聚合页换活实例，或改用本地加速（Watt Toolkit / FastGithub）。
 
 ### 7.6 国内主流镜像站汇总
 
@@ -423,7 +426,7 @@ https://hub.fastgit.xyz/user/repo/releases/download/v1.0/file.zip
 
 - **Android 打包首次编译**极其漫长（Gradle + SDK 几 G），建议晚上睡觉前跑
 - 或**预先手动下载** Gradle 包放到 `%USERPROFILE%\.gradle\wrapper\dists\` 下，跳过自动下载
-- **Web 版 (WASM)** 需下载 emscripten SDK，同样建议走 ghproxy
+- **Web 版 (WASM)** 需下载 emscripten SDK，同样建议走 GitHub 加速代理（见 7.5）
 - **Windows 打包**最快，基本没什么外部依赖
 - **关闭杀毒软件**实时扫描能显著提升 Ren'Py 编译速度（生成的大量 .rpyc 文件会被扫描）
 - Ren'Py 编译时可用 `--fast` 跳过一些非必要检查

@@ -10,12 +10,12 @@
 
 0. **构造函数参数**
    ```python
-   cli = RenPyCLI(sdk_path="D:/renpy-8.5.3-sdk")
+   cli = RenPyCLI(sdk_path="D:/renpy-sdk")
    ```
 1. **环境变量 `RENPY_SDK`**（最推荐）
    ```powershell
-   $env:RENPY_SDK = "D:\renpy-8.5.3-sdk"   # 当前会话
-   [Environment]::SetEnvironmentVariable("RENPY_SDK","D:\renpy-8.5.3-sdk","User")  # 永久
+   $env:RENPY_SDK = "D:\renpy-sdk"   # 当前会话
+   [Environment]::SetEnvironmentVariable("RENPY_SDK","D:\renpy-sdk","User")  # 永久
    ```
 2. **向上查找** — 从脚本所在目录向上遍历，寻找含 `renpy.py` 的目录
 3. **已知路径列表 `_KNOWN_SDK_PATHS`**（`sdk_common.py` 顶部，唯一维护点）
@@ -76,7 +76,7 @@ cli.merge_strings("项目路径", "chinese", "translations.json") # 合并回项
 ## 命令行入口
 
 ```bash
-python cli.py "D:/my_game" lint --sdk "D:/renpy-8.5.3-sdk"
+python cli.py "D:/my_game" lint --sdk "D:/renpy-sdk"
 python cli.py "D:/my_game" run
 python cli.py "D:/my_game" distribute
 python cli.py "D:/my_game" translate chinese   # 翻译需要语言参数（extra 位置参数）

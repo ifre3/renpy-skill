@@ -81,20 +81,9 @@ renpy.exe "C:\RenPy\project" lint --quit
 | **Shift+H** | 隐藏/显示所有界面 | 截屏用、检查界面层级 |
 | **Ctrl+Shift+D** | 启动时进入开发者模式 | 启动阶段报错时看详细信息 |
 
-### 开发者菜单（Shift+D）常用操作
+### 开发者菜单（Shift+D）最常用 3 项
 
-```
-开发者菜单:
-├─ 交互目录         ─ 查看所有 label，点选跳转
-├─ 修改变量         ─ 运行任意 Python 语句
-├─ 查看持久化数据    ─ 显示所有 persistent 变量
-├─ 显示属性         ─ 显示所有屏幕属性覆盖
-├─ 主题化测试        ─ 切换主题
-├─ 样式调试器       ─ 查看 widget style
-├─ 打开/关闭屏幕     ─ 方便调试 UI
-├─ 显示异常信息      ─ 显示最近错误
-└─ 退出
-```
+交互目录（查看/点选跳转所有 label）、修变量（跑任意 Python 语句）、打开/关闭屏幕（排查 UI 层级遮挡）。其余项进菜单直接认，无需背。
 
 ---
 
@@ -332,18 +321,13 @@ notepad "$env:APPDATA\RenPy\游戏名\log.txt"
 
 ---
 
-## 七、常见报错英文 → 中文解读
+## 七、报错判读
 
-| 英文报错 | 中文意思 | 常见原因 |
-|---------|---------|---------|
-| `IndexError: list index out of range` | 列表索引越界 | 访问了不存在的列表元素 |
-| `NameError: name 'xxx' is not defined` | 变量未定义 | 拼写错误或未初始化 |
-| `AttributeError: 'NoneType' object has no attribute 'xxx'` | 空对象取属性 | 某个函数返回了 None |
-| `TypeError: 'int' object is not callable` | 整数被当函数调用 | 函数名和变量名冲突了 |
-| `SyntaxError: invalid syntax` | 语法错误 | `:` 漏了、引号不匹配 |
-| `IOError: Couldn't find file 'xxx'` | 找不到文件 | 路径写错或文件没放 |
-| `KeyError: 'xxx'` | 字典键不存在 | 访问了不存在的 dict key |
-| `RecursionError: maximum recursion depth exceeded` | 递归过深 | 函数无限递归或死循环 |
+通用 Python 异常（IndexError/NameError/TypeError/KeyError 等）AI 直接判读 traceback 即可，不再列对照表；Ren'Py 特有报错与版本坑见 [renpy_gotchas.md](renpy_gotchas.md)，汉化崩溃分类见 renpy-dev `scripts/tl_check.py` 的三级报告。
+
+唯二值得记的引擎特有行为：
+- `IOError: Couldn't find file 'xxx'` 一律是**资源路径/大小写**问题（Ren'Py 路径大小写敏感，`Bg_Room.png` ≠ `bg_room.png`）
+- 致命错误的 traceback 除错误弹窗外，还会落在 `game/traceback.txt` 与 `game/errors.txt`，发行版玩家机器上也能拿到
 
 ---
 
