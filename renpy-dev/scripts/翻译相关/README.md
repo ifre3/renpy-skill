@@ -40,6 +40,10 @@ python check_untranslated.py "game/tl/schinese" --all
 python check_charname_translation.py "../.." -l schinese
 ```
 
+## 译文润色（二次提质）
+
+初翻完成后需要对译文润色时，按预算与范围选用：双角色两阶段润色工作流（初翻=本管线输出，润色者独立会话逐批过）或 LinguaGacha 路线。策略选择、prompt 要点、token 成本对照见 [../../references/translation_polish.md](../../references/translation_polish.md)；回填沿用本管线 `apply` 的安全规则。
+
 ## 角色名字框审计（check_charname_translation.py）
 
 Ren'Py 显示说话人名字时会走 `substitute(translate=True)`，所以**名字框是否显示中文，取决于 tl 里有没有 `old "名字"` 完全匹配的条目**——和名字定义在哪里无关。

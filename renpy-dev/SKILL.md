@@ -47,7 +47,7 @@ python scripts/check_assets.py --path "D:/my_game"  # 资源缺失/孤设
 
 | 场景 | 说明 |
 |------|------|
-| **项目体检（优先用现成工具）** | renpy-tools 工具包（**已内置 skill：`renpy-dev/tools/`**，纯标准库零依赖）统一入口：`python <skill>/renpy-dev/tools/renpy-tools-cli.py all <项目> -l schinese`。子命令：`crash` 崩溃风险、`untranslated` 空译文、`charname` 名字框漏译、`integrity` 变量/标签完整性、`label` 标签问题、`all` 全跑；仅 `lint` 子命令需要 SDK（`sdk_common.detect_sdk()` 解析）。闪退/缺句/名字英文先跑这个 |
+| **项目体检（优先用现成工具）** | renpy-tools 工具包（**已内置 skill：`renpy-dev/scripts/`**，纯标准库零依赖）统一入口：`python <skill>/renpy-dev/scripts/renpy-tools-cli.py all <项目> -l schinese`。子命令：`crash` 崩溃风险、`untranslated` 空译文、`charname` 名字框漏译、`integrity` 变量/标签完整性、`label` 标签问题、`all` 全跑；仅 `lint` 子命令需要 SDK（`--sdk` 参数或向上扫描 SDK 目录定位）。闪退/缺句/名字英文先跑这个 |
 | **翻译文件质检（tl 侧唯一工具）** | 上面工具跳过 tl 目录；用**内置**的 `python scripts/tl_check.py <项目> --lang schinese [--fix]` 查翻译侧隐患，按级别输出：**崩溃级**（未知文本标签、关闭无开放标签、不接受关闭的标签、未闭合大括号、`%(...)s` 丢类型字符——引擎在 `config.safe_text=False`（默认）时显示到该行直接 raise；工具会读取项目配置自动降级）、**显示级**（`{}` 标签新旧不一致、全角伪标签 `【i】`、空译文、`[]` 插值不匹配）、**提示级**（new==old 的未翻译行，不含在退出码里）。v3 按引擎源码模拟：标签大小写敏感、花括号内空格不剥离。`--fix` 自动修机械性问题（`%(变量名被翻)` 还原、`{ i }`/`{/B}` 规范化）；输出行号是**译文行**，直接定位要改的行。**⚠️ `[]插值不匹配` 虽归显示级，但"变量被改名/多出未定义变量"（`[totaldays]`→`[总天数]`、人名写成 `[Tora]`）引擎同样 KeyError 崩溃，按崩溃级处理：还原变量名或删掉方括号；译文裸 `%`（`50%都是油`）在 safe_text=False 下也崩，写 `%%`。另：发行版常把 .mp3/.ttf 直接放 game/ 根目录，check_assets 已扫描根目录 |
 | 反编译 .rpyc / 提台词 / 剧情地图 | 用已装的 **renpy-script-decompile** 技能（无需 unrpyc，纯 Python 解 slot + pickle stub） |
 | SDK 路径 | 自动检测（`sdk_common.py`）：`sdk_path=` 参数 → 环境变量 `RENPY_SDK` → 向上查找 → 已知路径；本机新装 SDK 只需在 `_KNOWN_SDK_PATHS` 追加一行 |
@@ -65,6 +65,8 @@ python scripts/check_assets.py --path "D:/my_game"  # 资源缺失/孤设
 [renpy-tools 工具包边界](references/tools_boundaries.md) — 各工具通用度分级（通用/半通用/专用）、写操作风险表、引擎版本经验；半通用工具换游戏前先看这页
 
 [剧本 → 脚本工作流](references/text2script_workflow.md) — 原始剧本转 .rpy 的拆分/命名/演出注释规范，及资产文档格式
+
+[译文润色方法](references/translation_polish.md) — 双角色两阶段润色工作流与 LinguaGacha 路线（风格前置/Agent 审校），含 token 成本对照；按预算与范围自选
 
 ## 版本边界
 

@@ -21,7 +21,7 @@
         * --csv 导出线性顺序
         * --append-new 把未入表的事件追加到列表尾部（带 .bak 备份）
 
-游戏只发布 .rpyc 没有 .rpy 源码时，先用 tools/设置/unrpyc.py 反编译再运行本工具。
+游戏只发布 .rpyc 没有 .rpy 源码时，先用 设置/unrpyc.py 反编译再运行本工具。
 
 用法示例:
     python linear_mode.py analyze "D:/games/MyGame-1.0-pc"
@@ -44,7 +44,7 @@ TOOLS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _load_backup_module():
-    """从 tools/公共/backup.py 按路径加载，避免非 ASCII 包名导入问题。"""
+    """从 公共/backup.py 按路径加载，避免非 ASCII 包名导入问题。"""
     path = os.path.join(TOOLS_DIR, "公共", "backup.py")
     spec = importlib.util.spec_from_file_location("lm_backup_module", path)
     mod = importlib.util.module_from_spec(spec)

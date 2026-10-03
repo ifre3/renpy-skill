@@ -7,9 +7,8 @@
 | 路径 | 职责 |
 |------|------|
 | `renpy-dev/SKILL.md` | 工程技能入口：脚本速览、触发关键词、注意事项（含独有引擎版本边界） |
-| `renpy-dev/scripts/` | SDK CLI 封装与独立脚本（lint / 编译 / 打包 / 结构分析 / 资源检查 / 字体 / i18n / tl 质检），依赖 `sdk_common.py` 做 SDK 探测 |
+| `renpy-dev/scripts/` | SDK CLI 封装与独立脚本（lint / 编译 / 打包 / 结构分析 / 资源检查 / 字体 / i18n / tl 质检），依赖 `sdk_common.py` 做 SDK 探测；含内置工具包 renpy-tools：统一入口 `renpy-tools-cli.py`，错误检测 / 翻译相关 / 线性模式 / 统一名称 / 设置五组及 140 用例回归测试 |
 | `renpy-dev/references/` | SDK 配置速查、renpy-tools 工具包边界分级、剧本→脚本工作流 |
-| `renpy-dev/tools/` | 独立工具包 renpy-tools：纯标准库、统一入口 `renpy-tools-cli.py`，含错误检测、翻译相关、线性模式、统一名称、设置五组工具及 140 用例回归测试 |
 | `renpy-user/SKILL.md` | 参考技能入口：只收录模型记不全或易过时的内容，.rpy 源码由 AI 直接编写 |
 | `renpy-user/references/` | gotchas 陷阱库、玩家侧工具地图、汉化工作流、画廊/养成、解锁补丁、排错指南、非显性技巧、字体/rpyc/rpa 速查 |
 
@@ -21,7 +20,7 @@
 
 ## 维护约定
 
-1. 可执行逻辑进 `tools/` 或 SDK，技能文档只保留模型不知道的结论。
+1. 可执行逻辑进 `renpy-dev/scripts/` 或 SDK，技能文档只保留模型不知道的结论。
 2. SKILL.md 的 description 必须覆盖全部故障关键词（崩溃 / traceback、汉化质检、字体方块、存档等）。
 3. 每次项目收尾最多追加 1 条 gotcha（不超过 10 行，附可复制命令），不写教程。
 4. 一个知识只放一处：`.rpyc` 反编译归独立的 renpy-script-decompile 技能，本包只保留指针。

@@ -1,10 +1,10 @@
 # Ren'Py Tools — 翻译检查与修复工具集
 
-> **已随 skill 内置**：本目录位于 skill 的 `renpy-dev/tools/`，纯 Python 标准库、零 SDK 依赖、
-> 零绝对路径，整体拷贝即可用。SDK 仅 `lint` 子命令需要（会经 `sdk_common.detect_sdk()` 定位）。
+> **已随 skill 内置**：本目录位于 skill 的 `renpy-dev/scripts/`（历史版本曾置于 `renpy-dev/tools/`），纯 Python 标准库、零 SDK 依赖、
+> 零绝对路径，整体拷贝即可用。SDK 仅 `lint` 子命令需要（`--sdk` 参数或向上扫描 SDK 目录定位）。
 >
-> 去重说明：翻译文件静态质检用 `../scripts/tl_check.py`（v3，问题分级，已取代本目录旧 v2）；
-> 多语言初始化统一用 `../scripts/setup_i18n.py`（重构版，本目录原始版已移除）。
+> 去重说明：翻译文件静态质检用同目录 `tl_check.py`（v3，问题分级，已取代旧 v2）；
+> 多语言初始化统一用同目录 `setup_i18n.py`（重构版，原始版已移除）。
 
 > 工具定位是修补检测，不代替专门翻译打包软件。
 
@@ -34,7 +34,7 @@ python renpy-tools-cli.py lint MyGame-1.0-pc --sdk D:/renpy-sdk
 $env:RENPY_TRANSLATE_API_URL = "https://你的端点/v1/chat/completions"
 $env:RENPY_TRANSLATE_API_KEY = "你的密钥"
 
-cd D:/path/to/tools/翻译相关
+cd D:/path/to/scripts/翻译相关
 python autotranslate.py scan game/tl/schinese
 python autotranslate.py translate game/tl/schinese
 python autotranslate.py apply game/tl/schinese --dry-run
@@ -50,10 +50,10 @@ python autotranslate.py apply game/tl/schinese
 ## 目录结构
 
 ```
-tools/
+scripts/
 ├── renpy-tools-cli.py                  🏠 统一 CLI 入口 (双击或命令行运行)
 ├── patch_android_tablet.bat            🖥️ 安卓平板模式打包 (双击运行)
-├── README.md / LICENSE                 📄 项目说明与许可
+├── README.md                           📄 本说明
 ├── 错误检测/                            🔍 翻译质量检查与审计
 │   ├── README.md                       ── 本组用法速览
 │   ├── common.py                       ── 共享模块 (编码/输出/翻译加载)

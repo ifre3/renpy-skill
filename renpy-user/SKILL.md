@@ -20,6 +20,7 @@ metadata:
 - **经验性陷阱** → [references/renpy_gotchas.md](references/renpy_gotchas.md)（字体回退、存档语义、SL2 坑）
 - **玩家侧工具地图** → [references/player_tools.md](references/player_tools.md)（解包/存档编辑/汉化/重放，调度现成工具而非重造轮子）
 - **汉化翻译工作流** → [references/translation_workflow.md](references/translation_workflow.md)（翻译 .rpy：文件校验 / `翻译结果.md` 术语表 / 意译原则 / 审查循环）
+- **译文润色**（已翻完还要提质）→ renpy-dev 的 [references/translation_polish.md](../renpy-dev/references/translation_polish.md)（双角色两阶段润色 / LinguaGacha 路线，按预算自选）
 - **非显性技巧陷阱速查** → [references/snippets.md](references/snippets.md)（F2 语言热键、Scroll 三参、拖放回调契约、历史屏/气泡/侧头像陷阱——只收模型容易写错的点，基础模板不收录）
 - **画廊/养成/调试** → [references/gallery_and_stats.md](references/gallery_and_stats.md)（画廊 CG/Music Room、属性养成、金手指、性能预设）
 - **一键解锁画廊/CG/回放**（别人的游戏）→ [references/unlock_patches.md](references/unlock_patches.md)（引擎判定链 + 投放式补丁全文 + 控制台一行 + 非标准画廊打法）

@@ -4,12 +4,12 @@
 > AI 的职责是判断场景 → 调度正确工具 → 处理工具输出。
 > 本地工具缺失时先 `pip install`（装到隔离环境），不要现写解析脚本。
 
-## 本地工具优先（renpy-tools 工具包，已内置 skill：`renpy-dev/tools/`）
+## 本地工具优先（renpy-tools 工具包，已内置 skill：`renpy-dev/scripts/`）
 
 汉化质检和崩溃排查**先用本地这套**，再考虑 pip 工具。纯标准库实现，随 skill 携带，无需 SDK（仅 `lint` 子命令需要）。统一入口：
 
 ```bash
-TOOLS=<skill目录>/renpy-dev/tools
+TOOLS=<skill目录>/renpy-dev/scripts
 python "$TOOLS/renpy-tools-cli.py" list            # 列出所有子工具
 
 # 崩溃风险检测（已默认跳过引擎目录；上报前会做作用域核实，误报少）
@@ -24,7 +24,7 @@ python "$TOOLS/renpy-tools-cli.py" untranslated <项目路径>/game/tl/schinese
 # （名字框走 substitute(translate=True)，缺条目就显示英文；可 --stub 生成待填骨架）
 python "$TOOLS/renpy-tools-cli.py" charname <项目路径> -l schinese
 
-# AI 翻译回填（autotranslate.py，安全流程见 tools/README.md）
+# AI 翻译回填（autotranslate.py，安全流程见 scripts/README.md）
 ```
 
 适用场景对照：汉化后闪退 → `crash`；汉化缺句/质检 → `integrity` + `untranslated`；
