@@ -1,4 +1,4 @@
-﻿# translate — AI 翻译、导出与翻译后修补
+# translate — AI 翻译、导出与翻译后修补
 
 这里的工具用于 Ren'Py 翻译生成后的检查和修补，不替代 Ren'Py SDK lint。
 

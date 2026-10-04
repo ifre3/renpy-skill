@@ -1,4 +1,4 @@
-﻿# Ren'Py 硬编码英文文本中文化补丁 (patch_renpy_say.py)
+# Ren'Py 硬编码英文文本中文化补丁 (patch_renpy_say.py)
 
 ## 功能
 
