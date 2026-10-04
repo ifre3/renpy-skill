@@ -1,4 +1,5 @@
 __pycache__/
+.zwork/
 *.pyc
 *.pyo
 *.egg-info/
