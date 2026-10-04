@@ -6,7 +6,7 @@ metadata:
   openclaw:
     emoji: 🛠️
     permissions: ["file.read", "file.write", "exec"]
-    os: ["darwin", "linux", "windows"]
+    os: ["windows", "linux"]
 ---
 
 # Ren'Py — 全栈技能
@@ -63,6 +63,7 @@ python scripts/sdk/check_assets.py --path "D:/my_game"  # 资源缺失/孤设
 | 测试 | 没有测试脚本——Ren'Py testcase 语法（`run`/`click`/`advance until screen`/`assert eval`）AI 直接写在 .rpy 里，用 `renpy.py 项目 test` 执行 |
 | 存档/解包/汉化补丁 | 解包/存档编辑/玩家侧补丁 → [references/player_tools.md](references/player_tools.md)；一键解锁画廊/CG/回放 → [references/unlock_patches.md](references/unlock_patches.md) |
 | 导出 JSON | 已删除 export.py——官方 `translate` 命令生成标准翻译文件，够用 |
+| 跨平台（darwin 已知限制） | scripts/ 下含中文目录名（错误检测 / 翻译相关 / 润色 / 统一名称 / 线性模式 / 设置 / 公共 / 测试），git 在 macOS 上会把路径归一化为 NFD，跨系统 checkout 后 import 可能找不到模块。darwin 上建议整体 clone 后 `git config core.precomposeunicode true` 再使用；linux/windows 无此问题 |
 
 ## 参考知识（按场景索引）
 

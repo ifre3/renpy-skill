@@ -4,6 +4,4 @@ __pycache__/
 *.pyo
 *.egg-info/
 .env
-my.zip
-say.md
 *.exe

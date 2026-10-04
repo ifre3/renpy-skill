@@ -118,7 +118,8 @@ scripts/
 │   ├── backup.py                       ── 首次 .bak + 原子写入
 │   └── rpy_syntax.py                   ── Ren'Py 翻译条目/字符串/插值解析
 └── 测试/                               🧪 单元测试
-    └── test_renpy_tools.py             ── 解析、回填安全、CLI 回归测试
+    ├── test_renpy_tools.py             ── 解析、回填安全、CLI 回归测试（168 用例）
+    └── test_say_parse_contract.py      ── say 解析器契约回归（9 用例，原差分验证的可复现版）
 ```
 
 ## 典型工作流

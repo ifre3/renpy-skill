@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 autotranslate.py — Ren'Py TL 增量批量翻译工具（统一管线）

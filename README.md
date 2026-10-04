@@ -9,7 +9,7 @@
 | 路径 | 职责 |
 |------|------|
 | `renpy/SKILL.md` | 唯一入口：脚本速览、触发关键词、注意事项（含独有引擎版本边界）、references 分场景索引 |
-| `renpy/scripts/` | 顶层仅统一门面 `renpy-tools-cli.py`（27 子命令）与 rpyc 反编译兜底 `unrpyc.py`；分组：`sdk/`（SDK CLI 封装：lint / 编译 / 打包 / 结构分析 / 资源检查 / 字体 / i18n / tl 质检，依赖 `sdk_common.py`）、错误检测 / 翻译相关 / 润色 / 统一名称 / 线性模式 / 设置 / 公共 / 测试，及 168 用例回归测试 |
+| `renpy/scripts/` | 顶层仅统一门面 `renpy-tools-cli.py`（26 子命令 + all/list）与 rpyc 反编译兜底 `unrpyc.py`；分组：`sdk/`（SDK CLI 封装：lint / 编译 / 打包 / 结构分析 / 资源检查 / 字体 / i18n / tl 质检，依赖 `sdk_common.py`）、错误检测 / 翻译相关 / 润色 / 统一名称 / 线性模式 / 设置 / 公共 / 测试，及 177 用例回归测试 |
 | `renpy/references/` | 15 个分场景参考：SDK 配置速查、工具包边界分级、剧本→脚本工作流、译文润色；gotchas 陷阱库、非显性技巧、画廊/养成/性能预设、字体/rpyc/rpa 速查、汉化工作流、汉化常见问题手册、tl 质检细则、玩家侧工具地图、解锁补丁、排错指南 |
 
 ## 使用
@@ -26,6 +26,15 @@
 4. 一个知识只放一处：`.rpyc` 反编译入口优先用独立的 renpy-script-decompile 技能，内置 `unrpyc.py` 仅作兜底（唯一说明处在 SKILL.md 注意事项"反编译"行）；rpyc/rpa 工具选型与版本坑统一在 `references/player_tools.md`，`advanced_tools.md` 不再重复；tl_check 分级细则唯一出处为 `references/tl_check.md`，SKILL.md 只留路由。
 
 ## 变更记录
+
+### 2026-10-05 三轮：评审修复（差分验证入库 / 计数校正 / 卫生清理）
+
+- **差分验证固化为契约测试**：原"新旧解析器差分测试"只有结论无物证（旧正则实现从未入库，git 全历史不可查）。新增 `scripts/测试/test_say_parse_contract.py`（9 用例），把声明过的合成样本维度（cd / tb / 空译文 / 转义引号 / old-new / multiple=2 / 尾部属性）固化为可复现断言，并显式断言旧正则两处缺陷不再出现（`\"` 解码、`old` 行不误判为 cd）。回归测试总用例 168 → 177。
+- **CLI 子命令计数校正**：`renpy-tools-cli.py` 实际 26 个子命令（TOOL_SCRIPTS），README 原先误写 27；已按 26 表述并注明 `all`/`list`。
+- **卫生清理**：移除 9 个 .py 文件的 UTF-8 BOM（编码统一，git 换行警告消除）；`.gitignore` 删去 `my.zip`、`say.md` 个人临时产物条目。
+- **跨平台声明如实化**：SKILL.md metadata 的 os 由 `darwin/linux/windows` 收敛为 `windows/linux`（中文脚本目录名未改——重命名牵动 import 与 6 处文档引用收益低，已在 SKILL.md 注意事项标注 darwin 上需 clone 后重命名或映射的已知限制）。
+- **合并成果补提交**：2026-10-03 起的双技能合并、历轮修复一直停留在工作区未入库；本轮将结构迁移（renpy-dev + renpy-user → renpy/）与文档修复拆为两个规范提交。
+- 验证：177 用例回归通过（168 + 9 契约）、全库 .md 链接 0 断链、CLI list 正常、BOM 清零。
 
 ### 2026-10-05 二轮：分类收敛 / 模板瘦身 / 解析层归一
 

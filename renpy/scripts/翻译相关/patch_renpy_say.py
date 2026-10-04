@@ -1,4 +1,4 @@
-﻿"""
+"""
 patch_renpy_say.py — 用外部 CSV 匹配规则替换 Ren'Py game/ 下 renpy.say() 中的硬编码英文文本
 
 匹配文件格式 (CSV, UTF-8):

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 fix_missing_tags.py — 修复译文中丢失的 Ren'Py 文本标签
