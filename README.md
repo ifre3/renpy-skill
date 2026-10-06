@@ -16,14 +16,12 @@
 | `package.py` | 分发打包（纯标准库）：显式白名单 + 产物结构自检 + 可复现 sha256。`python package.py` / `--check` |
 | `LICENSE` | MIT。`renpy/scripts/README.md` 声称 MIT，仓库就得真有这个文件（由测试盯） |
 
-## 使用
 
 - **加载**：向 Agent 显式指定 SKILL.md 路径（`renpy/SKILL.md`）。
 - **SDK 探测**优先级：`--sdk` 参数 → 环境变量 `RENPY_SDK` → 向上查找 → `sdk_common.py` 的 `_KNOWN_SDK_PATHS` → `~/renpy-sdk`。本机路径不写入仓库，本地使用时设 `RENPY_SDK` 环境变量或在 `_KNOWN_SDK_PATHS` 追加。
 - **AI 翻译**：服务端点与密钥均通过环境变量提供（`RENPY_TRANSLATE_API_URL` / `RENPY_TRANSLATE_API_KEY`），仓库不含任何服务地址或凭据。
 - **变更记录**：[CHANGELOG.md](CHANGELOG.md)（评审与修复流水，不在本文展开）。
 
-## 维护约定
 
 1. 可执行逻辑进 `renpy/scripts/` 或 SDK，技能文档只保留模型不知道的结论。
 2. SKILL.md 的 description 必须覆盖全部故障关键词（崩溃 / traceback、汉化质检、字体方块、存档等）。
@@ -33,7 +31,7 @@
 6. 改完 `scripts/` 必跑：`cd renpy/scripts/tests && python -m unittest discover`。**目录树、用例数、子命令数已由测试强制一致**，不用再靠人眼核对：`test_repo_consistency.py` 查文档内部自洽，`test_count.py` 查文档等于现实；新增/删除测试后这两处会一起失败并打印实际值。
 7. 分发一律走 `python package.py`：显式白名单，产物必须恰好一个 `SKILL.md`、不含 `.git/` / `__pycache__` / `renpy-dev` / `renpy-user`，时间戳固定因而可复现（同样的源码打出同样的 sha256）。提交前可跑 `python package.py --check` 只体检不写文件。
 
-## 已知边界
+## 进展
 
 - 未注册进技能加载器，需手动指定路径加载。
 - 解包 / 存档 / 汉化以调度成熟开源工具为主，不重写轮子；Ren'Py 自定义程度高，无法一键脚本化的部分由 AI 直接读写源码。
