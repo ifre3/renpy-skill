@@ -1,0 +1,18 @@
+{
+  "_readme": [
+    "自定义 screen 名清单：给 checks/ 下的翻译漏检检测器用。",
+    "",
+    "SCREEN_CALL_KW 里的名字决定「哪些自定义 screen 的文本会被当成翻译项检查」。",
+    "Ren'Py 标准 gui 组件（game_menu/heading/settings_item/tab_button）已内置，不用重复写。",
+    "只有当目标游戏自己造了新的 screen 调用且需要检查其文本时，才补进来。",
+    "",
+    "两种写法：",
+    "  [\"reward_button\", \"my_custom_panel\"]        → 追加到内置清单",
+    "  {\"replace\": [\"my_game_menu\", \"my_setting\"]}  → 完全替换内置清单",
+    "",
+    "查证方式：在游戏 rpy 里 grep '^screen ' 得到全部自定义 screen 名。",
+    "文件名固定 renpy_screen_calls.json，放在运行命令时的当前目录，",
+    "或用环境变量 RENPY_SCREEN_CALL_KW 指定绝对路径。"
+  ],
+  "replace": []
+}

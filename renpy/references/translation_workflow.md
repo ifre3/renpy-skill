@@ -19,15 +19,15 @@
 | 意译与润色 | 结构差异大的重大意译及理由 |
 | 审查修正 | 修正前后对比 + 原因 |
 
-> 机器可读的 `glossary.json`（供 `统一名称/unify_name_translations.py` 与 `统一名称/unify_names.py` 消费）不必手工从零写：先跑 `python scripts/统一名称/make_glossary.py <项目> --lang schinese -o glossary.json` 生成草稿（自动提取 Character 定义人名 + strings 块配对 + 碰撞/漂移报告），再按下节精读定稿。
+> 机器可读的 `glossary.json`（供 `names/unify_name_translations.py` 与 `names/apply_glossary_body.py` 消费）不必手工从零写：先跑 `python scripts/names/make_glossary.py <项目> --lang schinese` 生成草稿（自动提取 Character 定义人名 + strings 块配对 + 碰撞/漂移报告），再按下节精读定稿。**草稿与证据默认写项目根 `.cache/` 目录，不散落项目根**（AI 自己的中间产物同此，判据见 2.5 第 1 步）；定稿产物属交付物，也只在用户要求落盘时才进项目。
 
 ## 2.5 术语表精读（脚本取证 → AI 判资格）
 
 `make_glossary.py` 只做确定性取证（Character 定义 / strings 配对 / 字面碰撞 / 出现次数）；**术语资格、info 描述、旧词新用识别由 AI 略读全文判定**——脚本不该也不能力化这一步。流程：
 
-1. 读 `glossary_draft.json.evidence.jsonl`（全部候选含 count/collisions/where），对 `kind=term` 的候选逐条判定。
+1. 读 `.cache/glossary_draft_<项目名>.json.evidence.jsonl`（全部候选含 count/collisions/where；脚本默认写项目根 `.cache/`，路径见运行输出），对 `kind=term` 的候选逐条判定。**你自己的中间产物也进 `<项目根>/.cache/`**——批次 JSON、状态账本、略读笔记这类跨会话/多天还要复用的必须落这里：系统临时目录会被清空，账本一丢就重复润色/重复处理。只有本次会话读完就扔的采样片段才进临时目录（`.cache/` 会随任务积累，交付前清一遍即可）。一次性辅助代码优先复用 scripts/ 现成脚本或单行命令，不为小事新造脚本。
 2. 分批略读 tl 对白原文（~200 行/批、从多个不连续区域采样），像读轻小说一样读：
-   - **资格判据**（学 LinguaGacha glossary/rule.md）：身份可建立且需要保持一致的（人名/别名/地名/组织/作品特有概念）→ 收；普通职业、称谓、描述性表达按语境翻即可 → 弃。频率只是证据，不构成资格——低频但身份重要的照收。
+   - **资格判据**（学 LinguaGacha glossary/rule.md）：**只收专有名词**——人名/别名/称号/组织/作品特有概念/作品标题；**地名、系统词（好感度/属性/任务）、引擎 UI 词、普通职业、称谓、描述性表达一律不收**，按语境翻即可。频率只是证据，不构成资格——低频但身份重要的照收。
    - **旧词新用必抓**：普通词在这部作品里是专有概念（"星核"式）的，通用翻译模型必翻错，发现即收。这只有读了原文才看得出。
    - **复核人名译名**：Character 定义清单 vs 译文（`Saki→"Sunday"` 式张冠李戴只有读了才看得出）。
 3. **定稿前征求用户意见（必做，不得静默定稿）**：AI 略读到能概括剧情时停下，先给用户一句话简介「此游戏讲……（简略）」，再问术语表怎么选，三选一：
@@ -35,9 +35,9 @@
    - **不翻译**：专有名词保留原文，跳过术语表收录与后续统一（`glossary.json` 不产出或为空，直接进正文翻译）
    - **AI 自行选择**：按下方资格判据由 AI 定稿（继续 4–6 步）
    - 用户回答前不要产出 `glossary.json`，也不要开始大规模正文翻译
-4. 收录条目写 `info`：身份事实 + 消歧条件 + 人物关系（如 `A（lo 的姐姐）`）；条件必须能从**局部翻译输入**判断。有 `collisions` 的条目写清"何时用本条译名、其它用法怎么翻"。
+4. 收录条目 `info` **极简**：一句话，只写身份/关系 + 必要消歧（如 `A（lo 的姐姐）`、`Parker（与 Park 消歧）`）；不写行号、出现次数、定义文件等取证细节。有 `collisions` 的条目写清"何时用本条译名、其它用法怎么翻"。
 5. `src` 取最短自然稳定边界；仅当大小写存在真实碰撞才标 `case_sensitive`。
-6. 定稿合并：确定条目进 `glossary.json`（扁平 `{src: dst}`，喂 unify 统一）；带 info 的完整版存 `glossary_full.jsonl`（`{src, dst, info, case_sensitive}`，AI 翻译/润色时作为提示词注入）。
+6. 定稿合并：确定条目进 `glossary.json`（扁平 `{src: dst}`，喂 unify 统一）；带 info 的完整版存 `glossary_full.jsonl`（`{src, dst, info, case_sensitive}`，AI 翻译/polish时作为提示词注入）。
 
 ## 3. 翻译规则
 
@@ -99,7 +99,7 @@ game/tl/schinese/fonts/MiSans-Regular.ttf
 - **图片烤字 / 图片 UI**：PS（或 AI 去字）抹掉原文后导出同名 png 放入对应路径，比 OCR 回贴图轻得多，优先用这条
 - **视频内嵌字幕**：重压导出后转 webm（Ren'Py 只认 webm）；格式不对会静默不播
 - **合成字体（保持原游戏字体风格）**：FontCreator 打开原英文字体 + 中文字体，把 CJK 字形按相同码点选择性粘贴进原字体，字形转换器调粗细，导出后**原名**放 `tl/schinese/fonts/`。常规字体注入用 `scripts/sdk/setup_fonts.py` 即可，不必合成
-- 语言切换按钮 / 默认语言：`scripts/设置/fix_lang_button.py` + `switch_default_language.py`（三件套排查顺序见 SKILL.md 注意事项）
+- 语言切换按钮 / 默认语言：`scripts/setup/fix_lang_button.py` + `switch_default_language.py`（三件套排查顺序见 SKILL.md 注意事项）
 
 ## 7. 查缺补漏兜底：`config.replace_text`
 

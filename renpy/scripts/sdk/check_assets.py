@@ -6,8 +6,18 @@ Ren'Py 资源完整性检查工具
 import os
 import re
 import argparse
+import sys
 from pathlib import Path
 from collections import defaultdict
+
+# shared/rpa_index 提供归档内文件名清单（发行版把资源打进 .rpa，不读归档
+# 会把归档内资源全部误报缺失）；不可用时退化为纯磁盘检查
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "shared"))
+try:
+    from rpa_index import archive_names as _archive_names, names_by_ext as _names_by_ext
+except ImportError:
+    _archive_names = None
+    _names_by_ext = None
 
 
 ASSET_TYPES = {
@@ -145,6 +155,20 @@ def check_assets(project_path):
             s.add(os.path.splitext(fname)[0].lower())
         return s
 
+    # 归档内资源并入索引：引用命中归档名即视为存在（含完整路径与 basename 两形态）
+    if _archive_names is not None:
+        game_dir = Path(project_path) / "game"
+        rpa_names, rpa_errors = _archive_names(game_dir)
+        for err in rpa_errors:
+            print(f"⚠️  归档索引解析失败（忽略）: {err}")
+        for at, info in ASSET_TYPES.items():
+            for n in _names_by_ext(rpa_names, info["exts"]):
+                actual[at].add(n)
+                base = os.path.basename(n)
+                actual[at].add(base)
+        if rpa_names:
+            print(f"ℹ️  已并入 {len(rpa_names)} 个归档内文件名（.rpa）")
+
     img_index = _lower_index(actual.get("image", set()))
     audio_index = _lower_index(actual.get("audio", set()))
     font_index = _lower_index(actual.get("font", set()))
@@ -189,7 +213,15 @@ def check_assets(project_path):
 
     missing_audio = []
     for ref, fpath, lineno in refs.get("audio", set()):
-        if ref.lower() not in audio_index and os.path.splitext(ref)[0].lower() not in audio_index:
+        # 引用常带 audio/Music/ 前缀而索引存 basename，与图片检查一样做回退
+        rl = ref.lower()
+        found = (
+            rl in audio_index
+            or os.path.splitext(rl)[0] in audio_index
+            or os.path.basename(rl) in audio_index
+            or os.path.splitext(os.path.basename(rl))[0] in audio_index
+        )
+        if not found:
             missing_audio.append((ref, fpath, lineno))
 
     if missing_audio:
@@ -209,7 +241,15 @@ def check_assets(project_path):
 
     missing_fonts = []
     for ref, fpath, lineno in refs.get("font", set()):
-        if ref.lower() not in font_index and os.path.splitext(ref)[0].lower() not in font_index:
+        # 与音频同理：引用可能带 fonts/ 前缀，索引存 basename
+        rl = ref.lower()
+        found = (
+            rl in font_index
+            or os.path.splitext(rl)[0] in font_index
+            or os.path.basename(rl) in font_index
+            or os.path.splitext(os.path.basename(rl))[0] in font_index
+        )
+        if not found:
             missing_fonts.append((ref, fpath, lineno))
 
     if missing_fonts:

@@ -23,8 +23,8 @@ from sdk_common import detect_sdk, find_platform_python
 class RenPyCLI:
     """Ren'Py SDK 命令行封装（高频操作）。"""
 
-    def __init__(self, sdk_path: str = None):
-        self.sdk_path = detect_sdk(sdk_path)
+    def __init__(self, sdk_path: str = None, start: str = None):
+        self.sdk_path = detect_sdk(sdk_path, start=start)
         self.python_exe = find_platform_python(self.sdk_path)
 
     def _renpy_py(self) -> str:
@@ -176,7 +176,8 @@ def main():
 
     args = parser.parse_args()
     try:
-        cli = RenPyCLI(sdk_path=args.sdk)
+        # 自动检测时从项目路径向上找 SDK（项目嵌在 SDK 目录下的常见布局）
+        cli = RenPyCLI(sdk_path=args.sdk, start=args.project_dir)
     except RuntimeError as e:
         # SDK 缺失不打 traceback，直接给可执行的指引（选项说明见 sdk_common.detect_sdk）
         print(f"[SDK 缺失] {e}", file=sys.stderr)

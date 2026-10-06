@@ -24,7 +24,7 @@ tl_check.py — Ren'Py 翻译文件静态质检器 v3
   - 说话人识别支持带点表达式（mc.name，Lab Rats 2 类游戏占台词两成）、
     下标（the_group[0]）、引号字面量（"Janitor"，动态角色名）——以前只认
     \w+ 时这类台词整段漏检。
-  - 插值提取用 公共/rpy_syntax.iter_bracket_groups（嵌套感知、字符串感知、
+  - 插值提取用 shared/rpy_syntax.iter_bracket_groups（嵌套感知、字符串感知、
     遮蔽 {a=[url]} 标签参数），[len(x[i])] 提取完整外层而不是内层碎片；
     rpy_syntax 不可用时退回单层正则。
   - 原文本身未闭合/不平衡时豁免译文——那是源头错误，译文保持原样不背锅。
@@ -46,8 +46,8 @@ import re
 import sys
 from pathlib import Path
 
-# 公共/rpy_syntax 提供嵌套+字符串感知的插值扫描；不可用时退回单层正则
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "公共"))
+# shared/rpy_syntax 提供嵌套+字符串感知的插值扫描；不可用时退回单层正则
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "shared"))
 try:
     from rpy_syntax import iter_bracket_groups as _iter_bracket_groups
     from rpy_syntax import find_string_literal, replace_literal_content
@@ -135,6 +135,37 @@ def detect_safe_text(game_dir: Path) -> bool:
         except OSError:
             continue
     return False
+
+
+# 项目自定义标签的注册形态：
+#   config.custom_text_tags["name"] = fn      （新旧两种引擎写法）
+#   renpy.register_text_tag("name")           （7.4+ 推荐写法）
+#   config.self_closing_custom_text_tags["name"] = fn（不接受关闭的自定义标签）
+_CUSTOM_TAG_RES = (
+    re.compile(r'config\.custom_text_tags\s*\[\s*["\'](\w+)["\']\s*\]'),
+    re.compile(r'renpy\.register_text_tag\(\s*["\'](\w+)["\']'),
+)
+_SELF_CLOSING_RES = re.compile(r'config\.self_closing_custom_text_tags\s*\[\s*["\'](\w+)["\']\s*\]')
+
+
+def detect_custom_tags(game_dir: Path):
+    """收集项目 .rpy 里注册的自定义文本标签。
+
+    动态文本游戏（kinetic_text_tags 类）会注册 {chaos}/{bt} 这类标签，
+    不识别的话每次都报"未知标签/关闭无开放标签"误报——实测 AfterDark
+    0.26 一次 5 处全是这种。返回 (tags, self_closing)。"""
+    tags, self_closing = set(), set()
+    for p in game_dir.rglob("*.rpy"):
+        if "tl" in p.parts:
+            continue
+        try:
+            text = p.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        for rx in _CUSTOM_TAG_RES:
+            tags.update(rx.findall(text))
+        self_closing.update(_SELF_CLOSING_RES.findall(text))
+    return tags - self_closing, self_closing
 
 
 def pct_specs(s: str):
@@ -443,7 +474,10 @@ def apply_fix_rules(line: str, old_text: str | None, add_tflag=False):
 
 
 def check_file(path: Path, issues: list, untranslated: list, do_fix=False,
-               do_tflag=False, kana_check=True):
+               do_tflag=False, kana_check=True, label=None):
+    # label：报告里显示的文件标识；递归扫描后子目录可能与顶层同名，
+    # 用相对 tl 的路径避免两行 ctx 指向不同文件却无法区分
+    label = label or path.name
     in_strings = False
     old, old_line, last_comment, last_comment_line = None, None, None, None
 
@@ -456,7 +490,7 @@ def check_file(path: Path, issues: list, untranslated: list, do_fix=False,
         fixed, fixes = apply_fix_rules(raw_line, old_text, add_tflag=do_tflag)
         if fixes:
             edits[lineno] = fixed
-            issues.append((f"{path.name}:{lineno}", "修复", "已自动修复(" + kind + ")",
+            issues.append((f"{label}:{lineno}", "修复", "已自动修复(" + kind + ")",
                            "；".join(fixes)))
 
     for lineno, line in enumerate(lines, 1):
@@ -484,9 +518,9 @@ def check_file(path: Path, issues: list, untranslated: list, do_fix=False,
                 else:
                     if old is not None:
                         if old == text and (latin_words(old) or (kana_check and has_kana(old))):
-                            untranslated.append((f"{path.name}:{lineno}", old[:60]))
+                            untranslated.append((f"{label}:{lineno}", old[:60]))
                         else:
-                            compare(old, text, f"{path.name}:{lineno}", issues, kana_check)
+                            compare(old, text, f"{label}:{lineno}", issues, kana_check)
                         maybe_fix(lineno, line, old, "new行")
                     old = None
                 continue
@@ -496,9 +530,9 @@ def check_file(path: Path, issues: list, untranslated: list, do_fix=False,
         if dm and last_comment is not None:
             new_text = unescape('"' + dm.group(1) + '"')
             if last_comment == new_text and (latin_words(last_comment) or (kana_check and has_kana(last_comment))):
-                untranslated.append((f"{path.name}:{lineno}", new_text[:60]))
+                untranslated.append((f"{label}:{lineno}", new_text[:60]))
             else:
-                compare(last_comment, new_text, f"{path.name}:{lineno}", issues, kana_check)
+                compare(last_comment, new_text, f"{label}:{lineno}", issues, kana_check)
             maybe_fix(lineno, line, last_comment, "对白")
             last_comment = None
         # 译文行没有对应的 # 原文注释（少见），拿不到原文，跳过
@@ -533,15 +567,22 @@ def main():
 
     game_dir = tl.parent.parent  # tl/<lang> → game
     safe_text = detect_safe_text(game_dir)
+    # 项目自定义标签并入已知集合（不接受关闭的进 NO_CLOSE_TAGS）
+    custom_tags, custom_self_closing = detect_custom_tags(game_dir)
+    KNOWN_TAGS.update(custom_tags)
+    NO_CLOSE_TAGS.update(custom_self_closing)
 
     issues: list = []          # (ctx, 级别, 类型, 明细)
     untranslated: list = []    # (ctx, 文本)
-    files = sorted(list(tl.glob("*.rpy")) + list(tl.glob("*.rpym")))
+    # 递归扫描：发行项目的 tl 常按 game/ 目录镜像分子目录（Girls Scripts/ 等），
+    # 只扫顶层会漏掉大多数翻译文件
+    files = sorted(list(tl.rglob("*.rpy")) + list(tl.rglob("*.rpym")))
     # 假名检查只对非日语目标语言有意义（--lang ja* 时假名是正文）
     kana_check = not args.lang.lower().startswith("ja")
     for f in files:
         check_file(f, issues, untranslated, do_fix=args.fix,
-                   do_tflag=args.add_tflag, kana_check=kana_check)
+                   do_tflag=args.add_tflag, kana_check=kana_check,
+                   label=f.relative_to(tl).as_posix())
 
     # 项目开启 safe_text 时，未知标签显示为字面文字，不崩溃 → 降级
     if safe_text:

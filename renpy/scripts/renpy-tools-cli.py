@@ -8,7 +8,14 @@
     python renpy-tools-cli.py all <项目目录> -l schinese
     python renpy-tools-cli.py integrity <项目目录> -l schinese
 
-命令后的参数会原样传给子脚本，本入口自身的退出码就是子脚本失败状态的汇总。
+命令后的参数会原样传给子脚本。
+
+退出码约定:
+    0  - 所有检查通过 / 命令成功
+    1  - 检查发现问题（不是脚本崩溃）
+    2  - 脚本崩溃 / 参数错误 / 未找到命令
+
+子脚本返回负值（如被信号终止）时会被归一化为 2。
 """
 
 import argparse
@@ -19,76 +26,94 @@ import sys
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
-CHECK_DIR = os.path.join(TOOLS_DIR, "错误检测")
-TRANSLATE_DIR = os.path.join(TOOLS_DIR, "翻译相关")
-LINEAR_DIR = os.path.join(TOOLS_DIR, "线性模式")
-SETUP_DIR = os.path.join(TOOLS_DIR, "设置")
-SCRIPTS_DIR = os.path.join(TOOLS_DIR, "sdk")
 PYTHON = sys.executable
 
-TOOL_SCRIPTS = {
-    "ui": os.path.join(CHECK_DIR, "check_ui_text.py"),
-    "misuse": os.path.join(CHECK_DIR, "check_translation_misuse.py"),
-    "func": os.path.join(CHECK_DIR, "check_func_text.py"),
-    "auto": os.path.join(CHECK_DIR, "check_auto_trans.py"),
-    "duplicate": os.path.join(CHECK_DIR, "check_duplicate_translations.py"),
-    "button": os.path.join(CHECK_DIR, "check_button_missing_translation.py"),
-    "label": os.path.join(CHECK_DIR, "check_label_issues.py"),
-    "type": os.path.join(CHECK_DIR, "check_type_safety.py"),
-    "lint": os.path.join(CHECK_DIR, "lint_check.py"),
-    "integrity": os.path.join(TRANSLATE_DIR, "check_translation_integrity.py"),
-    "untranslated": os.path.join(TRANSLATE_DIR, "check_untranslated.py"),
-    "charname": os.path.join(TRANSLATE_DIR, "check_charname_translation.py"),
-    "namebox": os.path.join(TRANSLATE_DIR, "sync_namebox_translation.py"),
-    "crash": os.path.join(CHECK_DIR, "check_crash_risks.py"),
-    "linear": os.path.join(LINEAR_DIR, "linear_mode.py"),
-    "fixtags": os.path.join(TRANSLATE_DIR, "fix_missing_tags.py"),
-    "fixcomments": os.path.join(TRANSLATE_DIR, "fix_translation_comments.py"),
-    "patchsay": os.path.join(TRANSLATE_DIR, "patch_renpy_say.py"),
-    "i18n": os.path.join(SCRIPTS_DIR, "setup_i18n.py"),
-    "lang": os.path.join(SETUP_DIR, "switch_default_language.py"),
-    "fonts": os.path.join(SETUP_DIR, "add_fonts.py"),
-    "langbtn": os.path.join(SETUP_DIR, "fix_lang_button.py"),
-    "perfpanel": os.path.join(SETUP_DIR, "add_performance_panel.py"),
-    "rmsuffix": os.path.join(SETUP_DIR, "remove_translated.py"),
-    "unrpyc": os.path.join(TOOLS_DIR, "unrpyc.py"),
-    "tablet": os.path.join(SETUP_DIR, "patch_android_tablet.py"),
-}
+# 工具注册表在 shared/tool_registry.py：子命令→路径、检查器契约元数据、分组。
+# 过去这里是两张 33 项手写表（TOOL_SCRIPTS / TOOL_DESC）+ 两个硬编码集合
+# （NEEDS_TL_DIR / TL_DIR_TOOLS）；现检查器的 name/summary/takes/requires_tl 由
+# 各脚本自己的 CHECKER 声明，门面不再重复维护。动工具清单只改注册表一处。
+_SHARED = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shared")
+if _SHARED not in sys.path:
+    sys.path.insert(0, _SHARED)
 
-TOOL_DESC = {
-    "ui": "检测 screen UI 文本 (textbutton/label/show text) 缺少 _()",
-    "misuse": "检测 Character[var] 缺 !t、翻译函数误用和插值标志问题",
-    "func": "检测 renpy.input/notify/自定义屏幕调用缺少 _()",
-    "auto": "交叉引用 Character 名字框和 menu 选项翻译覆盖",
-    "duplicate": "检测翻译文件中重复的 old 字符串",
-    "button": "检测按钮文本未被 translate strings 捕获",
-    "label": "检测 Ren'Py 标签问题（未定义/重复/不可达）",
-    "type": "检测 Python 类型安全问题",
-    "lint": "调用 SDK lint 和翻译专项检查",
-    "integrity": "检查变量、角色、标签结构、参数和转义完整性",
-    "untranslated": "检查未翻译或空译文条目（支持 CSV）",
-    "charname": "检查角色名字框翻译完整性（Character 定义名是否有字符串翻译）",
-    "namebox": "同步角色名字框翻译（按术语表）",
-    "crash": "检测运行时崩溃风险",
-    "linear": "线性模式: analyze 分析 / add 生成补丁 / modify 校验事件表",
-    "fixtags": "尝试修复丢失的文本标签（低置信度只生成人工清单）",
-    "fixcomments": "翻译注释中的术语反向恢复为英文原文",
-    "patchsay": "修补 renpy.say() 硬编码英文（按 翻译相关/renpy_say_replacements.csv）",
-    "i18n": "多语言初始化（重构版，位于 sdk/setup_i18n.py）",
-    "lang": "切换默认语言（需先跑 i18n）",
-    "fonts": "添加字体（需先跑 i18n 生成 fonts_common.rpy）",
-    "langbtn": "修复语言按钮写死/缺目标语言项（默认试运行，--apply 写入）",
-    "perfpanel": "添加/移除性能浮层（--remove）",
-    "rmsuffix": "移除文件名 _translated 重复后缀",
-    "unrpyc": "下载 unrpyc 并反编译 .rpyc",
-    "tablet": "安卓平板变体强制补丁（需拷入 SDK 内运行）",
-}
+import tool_registry as REG  # noqa: E402
 
-CHECK_GROUP = ["ui", "misuse", "func", "auto", "charname"]
-CRASH_GROUP = ["crash"]
-FIX_GROUP = ["fixtags", "fixcomments", "patchsay", "langbtn"]
-SETUP_GROUP = ["i18n", "lang", "fonts", "perfpanel", "rmsuffix", "unrpyc", "tablet"]
+CHECK_DIR = os.path.join(REG.TOOLS_DIR, "checks")
+TRANSLATE_DIR = os.path.join(REG.TOOLS_DIR, "translate")
+
+#: 子命令 → 脚本绝对路径（工具清单只在注册表一处维护）
+TOOL_SCRIPTS = {n: REG.script_path(n) for n in REG.TOOL_SCRIPTS}
+
+#: 描述文案。检查器走 CHECKER.summary（脚本自报），非检查器走注册表 TOOL_DESC。
+#: 门面多处用到 TOOL_DESC[name]，故这里给检查器也填一份快照——
+#: 取自注册表，源头唯一，不会与脚本漂移。
+TOOL_DESC = {n: REG.summary(n) for n in REG.TOOL_SCRIPTS}
+
+#: 无 game/tl/<lang> 就无法工作的工具。all 跑之前统一检查一次，避免用户对着
+#: 5 段一模一样的报错找原因。检查器部分来自各自 CHECKER.requires_tl。
+NEEDS_TL_DIR = set(REG.all_requires_tl()) | REG.TL_DIR_WRITERS
+
+# 分组只影响 `list` 的展示与 all 的先后；清单本体在 shared/tool_registry.py。
+CHECK_GROUP = REG.CHECK_GROUP
+CRASH_GROUP = REG.CRASH_GROUP
+I18N_GROUP = REG.I18N_GROUP
+STRUCT_GROUP = REG.STRUCT_GROUP
+FIX_GROUP = REG.FIX_GROUP
+SETUP_GROUP = REG.SETUP_GROUP
+
+ALL_GROUP = REG.ALL_GROUP
+
+# 接受 tl_dir 而非项目目录的子脚本：all 需要替用户把 `<项目>` 换算成
+# `<项目>/game/tl/<lang>`，否则把项目路径直接喂给它们必然报「目录不存在」。
+# 现在由各脚本的 CHECKER.takes 声明（untranslated 是唯一吃 tl_dir 的）。
+TL_DIR_TOOLS = set(REG.all_takes_tl_dir())
+DEFAULT_LANG = REG.DEFAULT_LANG
+
+
+def _split_all_args(child_args):
+    """从 all 的透传参数里拆出 (项目目录, 其它参数)。
+
+    只做最小识别：第一个既不以 '-' 开头、也不是某个选项取值的 token 视为项目目录。
+    无法可靠判断时返回 None，交由调用方跳过需要 tl_dir 的脚本（而不是传错路径）。
+    """
+    project = None
+    rest = list(child_args)
+    i = 0
+    value_opts = {"-l", "--language", "--lang", "-o", "--output", "--csv", "--sdk"}
+    while i < len(rest):
+        tok = rest[i]
+        if tok in value_opts:
+            i += 2
+            continue
+        if tok.startswith("-"):
+            i += 1
+            continue
+        if project is None:
+            project = tok
+        i += 1
+    lang = DEFAULT_LANG
+    for flag in ("-l", "--language", "--lang"):
+        if flag in rest:
+            idx = rest.index(flag)
+            if idx + 1 < len(rest) and not rest[idx + 1].startswith("-"):
+                lang = rest[idx + 1]
+    return project, lang
+
+
+def _tl_dir_for(project, lang):
+    """项目目录 → tl 语言目录；不存在则返回 None。"""
+    if not project:
+        return None
+    cand = os.path.join(project, "game", "tl", lang)
+    return cand if os.path.isdir(cand) else None
+
+
+def _replace_project_arg(child_args, project, replacement):
+    """把透传参数里的项目路径替换为 tl_dir，其余参数原样保留。"""
+    out = []
+    for tok in child_args:
+        out.append(replacement if tok == project else tok)
+    return out
 
 
 def run_script(name, args):
@@ -97,10 +122,16 @@ def run_script(name, args):
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     try:
-        return subprocess.call(cmd, env=env)
+        rc = subprocess.call(cmd, env=env)
     except OSError as exc:
         print(f"[ERROR] 无法启动 {name}: {exc}", file=sys.stderr)
         return 2
+    # 归一化退出码：负值（被信号终止）→ 2，其他非 0/1 值 → 1
+    if rc < 0:
+        return 2
+    if rc > 1:
+        return 1
+    return rc
 
 
 def main(argv=None):
@@ -130,41 +161,62 @@ def main(argv=None):
             print("[ERROR] list 命令不接受额外参数")
             return 2
         print("Ren'Py 翻译工具集\n")
-        print("检查类 (只读):")
-        for name, desc in TOOL_DESC.items():
-            if name in CHECK_GROUP or name in CRASH_GROUP:
-                print(f"  {name:14s} {desc}")
+        print("检查类 (只读，`all` 会跑):")
+        for name in ALL_GROUP:
+            print(f"  {name:14s} {TOOL_DESC[name]}")
+        needs = sorted(NEEDS_TL_DIR & set(ALL_GROUP))
+        print(f"\n上面 {len(ALL_GROUP)} 项中，{'/'.join(needs)}")
+        print("需要 game/tl/<lang> 存在；没有时 all 会明确跳过并提示先跑 setup_i18n。")
         print("\n修补/写入类 (默认试运行，--apply/--execute 才落盘):")
-        for name, desc in TOOL_DESC.items():
-            if name in FIX_GROUP or name in SETUP_GROUP:
-                print(f"  {name:14s} {desc}")
-        print("\n其他:")
-        for name, desc in TOOL_DESC.items():
-            if (
-                name not in CHECK_GROUP
-                and name not in CRASH_GROUP
-                and name not in FIX_GROUP
-                and name not in SETUP_GROUP
-            ):
-                print(f"  {name:14s} {desc}")
-        print("\n批量: python renpy-tools-cli.py all <项目目录> [子脚本参数...]")
+        for name in FIX_GROUP + SETUP_GROUP:
+            print(f"  {name:14s} {TOOL_DESC[name]}")
+        print("\n其他 (只读，需显式调用):")
+        grouped = set(ALL_GROUP) | set(FIX_GROUP) | set(SETUP_GROUP)
+        for name in TOOL_DESC:
+            if name not in grouped:
+                print(f"  {name:14s} {TOOL_DESC[name]}")
+        print("\n批量: python renpy-tools-cli.py all <项目目录> -l <语言>")
         return 0
 
     if cmd == "all":
         print("=" * 60)
-        print("  ALL: ui + misuse + func + auto + charname + crash")
+        print("  ALL: " + " + ".join(ALL_GROUP))
         print("=" * 60)
+        project, lang = _split_all_args(child_args)
+        tl_dir = _tl_dir_for(project, lang)
+
+        if not tl_dir:
+            print(f"[WARN] 未找到 {project}/game/tl/{lang}")
+            print("       以下翻译侧检查将跳过：")
+            print("         " + " ".join(sorted(NEEDS_TL_DIR & set(ALL_GROUP))))
+            print("       这是预期行为（项目还没建翻译目录），不是错误。")
+            print("       想做翻译体检先跑：python sdk/setup_i18n.py --path <项目> --lang %s\n" % lang)
+        else:
+            print(f"tl 目录: {tl_dir}\n")
+
         failed = []
-        for name in CHECK_GROUP + CRASH_GROUP:
+        for name in ALL_GROUP:
             print(f"\n--- {name} {'-' * (50 - len(name))}")
             print(f"  {TOOL_DESC[name]}")
+
+            if name in NEEDS_TL_DIR and not tl_dir:
+                print(f"  -- 跳过：无 {lang} 翻译目录")
+                continue
+
+            args = child_args
+            if name in TL_DIR_TOOLS:
+                # 用 tl_dir 替换透传参数里的项目路径位
+                args = _replace_project_arg(child_args, project, tl_dir)
+                print(f"  （tl_dir: {tl_dir}）")
+
             print(f"{'-' * 54}")
-            rc = run_script(name, child_args)
+            rc = run_script(name, args)
             if rc != 0:
                 failed.append((name, rc))
                 print(f"\n  !! {name} exit code {rc}")
         if failed:
-            print("\n失败项: " + ", ".join(f"{name}({rc})" for name, rc in failed))
+            print("\n有问题的检查项: " + ", ".join(f"{name}({rc})" for name, rc in failed))
+            print("（退出码 1 通常表示「查出了问题」，不是脚本崩溃；崩溃看 traceback）")
             return 1
         return 0
 

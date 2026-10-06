@@ -1,0 +1,16 @@
+{
+  "_readme": [
+    "人名统一时跳过的文件名清单（给 names/unify_name_translations.py 用）。",
+    "",
+    "这些文件的内容不是可翻译的人名对话（语言设置、名字映射表、cheat 菜单等），",
+    "跑了术语表直改会破坏它们。",
+    "",
+    "内置只含 defaultlanguage.rpy（Ren'Py 标准文件）。其余按项目补：",
+    "  [\"my_names.rpy\", \"cheats.rpy\"]      → 追加到内置清单",
+    "  {\"replace\": [\"only_this.rpy\"]}        → 完全替换内置清单",
+    "",
+    "文件名固定 renpy_skip_files.json，放在运行命令时的当前目录，",
+    "或用环境变量 RENPY_SKIP_FILES 指定绝对路径。"
+  ],
+  "replace": []
+}

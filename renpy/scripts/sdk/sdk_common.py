@@ -20,10 +20,11 @@ def _is_sdk(path: str) -> bool:
     return os.path.isdir(path) and os.path.isfile(os.path.join(path, "renpy.py"))
 
 
-def detect_sdk(sdk_path: str = None) -> str:
+def detect_sdk(sdk_path: str = None, start: str = None) -> str:
     """按优先级检测 Ren'Py SDK 根目录，失败时抛 RuntimeError。
 
     优先级：显式参数 > 环境变量 RENPY_SDK > 向上查找 > _KNOWN_SDK_PATHS > ~/renpy-sdk
+    向上查找从 start（通常是项目路径）开始；调用方不传才退回本脚本所在目录。
     """
     if sdk_path and _is_sdk(sdk_path):
         return os.path.abspath(sdk_path)
@@ -32,7 +33,7 @@ def detect_sdk(sdk_path: str = None) -> str:
     if env and _is_sdk(env):
         return os.path.abspath(env)
 
-    cur = os.path.dirname(os.path.abspath(__file__))
+    cur = os.path.abspath(start) if start else os.path.dirname(os.path.abspath(__file__))
     for _ in range(8):
         parent = os.path.dirname(cur)
         if parent == cur:

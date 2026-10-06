@@ -4,6 +4,9 @@
 > 机制结论基于 Ren'Py 8.5.3 引擎源码审读（`renpy/common/00gallery.rpy`、`renpy/exports/persistentexports.py`），该结构自 6.99.13 起长期稳定。
 > 社区参照：ZLZK《Universal Gallery Unlocker》（F95zone，2022-2024，664 赞）——本页打法是其思路的引擎源码级重实现，覆盖面更广。
 
+> **不要用 URM 代替本页**：[Universal Ren'Py Mod](player_tools.md) 也是投放式、也不碰原文件，但它的「场景重放」建在 `persistent._seen_ever`（看过的 **label**）上，而画廊判定走 `persistent._seen_images`（看过的**图片**）——两个字典不同，URM 解不了画廊。要开画廊必须用下面的三重旁路（本页已纳入判据链）。
+> 若用户要的是「重看看过的剧情」而非「开锁没看过的」，那直接用 URM 更方便。
+
 ---
 
 ## 一、引擎解锁判定链（为什么这么打）

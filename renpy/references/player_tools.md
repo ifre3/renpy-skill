@@ -39,7 +39,7 @@ python "$TOOLS/renpy-tools-cli.py" charname <项目路径> -l schinese
 | **unrpa** | 仅 RPA 解包（老牌、简单场景够用；⚠️ 新游戏 RPA-3.0 档案可能解析失败，见 Lattyware/unrpa#50） | `pip install unrpa` |
 | **unrpyc** | 仅 rpyc 反编译（经典，兼容到 Ren'Py 6） | GitHub: CensoredUsername/unrpyc |
 | **rpa-toolkit** | .rpa/.rpi 解包 + .rpyc/.rpymc 反编译（rpatool 停更后的现代替代） | GitHub: regiellis/rpa-toolkit |
-| **Universal Ren'Py Mod (URM)** | 游戏内 Mod：变量查找/修改/冻结、场景重放、选项后果提示、存档管理 | 官方地址 https://0x52.dev/mods/Universal-Ren-Py-Mod-1000（当前 v2.6.2），把 Mod 文件放进游戏 game/ 目录 |
+| **Universal Ren'Py Mod (URM)** | 通用游戏内 Mod：变量查找/修改/冻结/监控、场景查找与重放、**查看并选择隐藏/锁定选项**、路径 / if 语句检测、存档管理（重命名/移动/删除）、**任意角色显示名重命名**、文本框自定义、quickmenu 自定义 | 0x52.dev（官方）https://0x52.dev/mods/Universal-Ren-Py-Mod-1000，v2.6.2 / 1.1 MB，**要求引擎 ≥6.99.14**；下载 Mod 文件放进游戏 `game/` 目录，不动原游戏文件（官方设计约定：删除即完全还原） |
 | **SaveEditOnline / Griviewer** | 网页版存档编辑（无 Python 环境的玩家用） | 网页直接用 |
 | **Game Mod Kit** | 在线全家桶：RPA 解包 + rpyc 反编译 + 存档编辑 + APK | gamemodkit.com |
 | **Lunatranslator** | 游玩生肉时的 HOOK 提取文本 + 翻译 | GitHub: HIllya51/LunaTranslator（官网 lunatranslator.org），活跃维护 |
@@ -87,10 +87,31 @@ rpycdec extract-translate /path/to/game/ -l chinese
 
 ## 常见玩法链路
 
-1. **解锁全 CG / 全结局**：首选投放式补丁（不碰存档、可整体还原）→ [unlock_patches.md](unlock_patches.md) 含补丁全文；其余走编辑 `persistent`（同目录、无扩展名，rpycdec save extract 同样适用）或游戏内装 URM 直接改
-2. **汉化生肉**：解包 → `rpycdec decompile` 拿到脚本 → 翻译 `.rpy` 的 `tl/` 目录 → 重新打包回 game/（或直接以 .rpy 散文件覆盖，Ren'Py 优先加载 .rpy）
-3. **改数值/跳剧情**：首选 URM（游戏内实时改，不碰文件）；需要文件级修改时走 rpycdec save 链路
-4. **只有 APK 的游戏**：`rpycdec extract-game` 一步到位，比解压 APK 再找 assets 手动抽省事得多
+先判断需求属于哪一类，再选工具：**不碰文件**（投放式，删完即还原）→ **碰文件/存档**（改后不好回退）。
+
+| 需求 | 首选 | 备注 |
+|------|------|------|
+| 解锁全 CG / 全结局 | **投放式补丁** → [unlock_patches.md](unlock_patches.md) | 不写 persistent，删文件即还原。**URM 替代不了**（判据不同，见下节） |
+| 回看已过剧情 / 场景重放、选隐藏或锁定选项 | **URM** | 其场景重放基于看过的 **label**，不是看过的**图片** |
+| 改变量 / 冻结数值 / 看隐藏 if 路径 | **URM** | 实时生效，不写文件 |
+| 改角色**显示名**（不改资料库） | **URM** | 运行时生效 |
+| 改角色**资料库译名**（全局永久，含 tl 文件） | `scripts/names/unify_name_translations.py` | 改文件，带三步审核 + 整目录回滚快照 |
+| 修存档里的进度 | **URM** 存档管理，或编辑 `persistent`（同目录、无扩展名，rpycdec save extract 同样适用） | 文件级改动需重签名 |
+| 汉化生肉 | 解包 → `rpycdec decompile` 拿到脚本 → 翻译 `.rpy` 的 `tl/` 目录 → 打包回 game/（或直接以 .rpy 散文件覆盖，Ren'Py 优先加载 .rpy） | 本 skill 的主场景，见 translation_workflow.md |
+| 只有 APK 的游戏 | `rpycdec extract-game` | 比解压 APK 再找 assets 手动抽省事得多 |
+
+### 为什么「全 CG 解锁」不用 URM
+
+两者都是投放式、都不碰原文件，但判据走的是**不同的 persistent 字典**（官方 `persistentexports.py`）：
+
+| persistent 键 | 记录什么 | 谁在读 |
+|------|------|------|
+| `_seen_images` | 看过的**图片** | `renpy.seen_image()` → 画廊解锁判定本体 |
+| `_seen_ever` | 看过的 **label** | 场景重放（URM） |
+
+URM 的「场景查找与重放」建立在 `_seen_ever` 上，**解不了画廊**。用 URM 往回放看过的剧情段，画廊里的 CG 仍然锁着。要开画廊必须走 unlock_patches.md 的旁路（`renpy.seen_image` 恒真 / 清空 Gallery conditions）。
+
+反过来：若用户要的是「重看已看过的剧情」而不是「开没看过的」，那 URM 更方便——不要拿 unlock_patches 那套重东西。
 
 ## 开发者侧对应操作
 

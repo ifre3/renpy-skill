@@ -5,24 +5,39 @@
 
 ## 通用度分级
 
-- 【通用 21】`renpy-tools-cli` `tl_check` `check_charname_translation` `check_translation_integrity` `check_untranslated` `fix_translation_comments` `patch_renpy_say`(机制) `add_performance_panel` `patch_android_tablet` `remove_translated` `setup_i18n` `unrpyc` `check_auto_trans` `check_crash_risks` `check_duplicate_translations` `check_label_issues` `check_translation_misuse` `check_type_safety` `check_ui_text` `lint_check` `make_glossary` —— 直接用。
-- 【半通用 11】`linear_mode` `unify_name_translations` `autotranslate` `sync_namebox_translation` `add_fonts` `switch_default_language` `fix_lang_button` `check_func_text` `check_button_missing_translation` `lint_report` `lint_rpy`
-- 【专用 2】`fix_missing_tags`
-- 【基础设施】`公共/backup.py`(幂等 .bak+原子写, fail-closed) `公共/rpy_syntax.py` `错误检测/common.py`
+分级覆盖 `scripts/` 下全部 47 个非测试模块（2026-10-05 补齐，原先漏登 8 个）。
+
+- 【通用 24】`renpy-tools-cli` `tl_check` `check_charname_translation` `check_translation_integrity` `check_untranslated` `fix_translation_comments` `patch_renpy_say`(机制) `add_performance_panel` `patch_android_tablet` `remove_translated` `setup_i18n` `unrpyc` `check_auto_trans` `check_crash_risks` `check_duplicate_translations` `check_label_issues` `check_translation_misuse` `check_type_safety` `check_ui_text` `lint_check` `make_glossary` `analyze` `check_assets` `sdk_common` —— 直接用。
+- 【半通用 13】`linear_mode` `unify_name_translations` `autotranslate` `sync_namebox_translation` `add_fonts` `switch_default_language` `fix_lang_button` `check_func_text` `check_button_missing_translation` `lint_report` `lint_rpy` `optimize_assets` `urm_install`
+- 【专用 3】`fix_missing_tags` `setup_fonts` `extract_say`+`merge_polish`+`screen_suspicious`（润色组三件套，作为管线整体使用）
+- 【基础设施】`shared/backup.py`(幂等 .bak+原子写, fail-closed) `shared/rpy_syntax.py` `checks/common.py` `polish/_say_parse.py`(rpy_syntax 适配器)
+
+### 新补登条目的边界
+
+| 工具 | 边界 | 保守做法 |
+|------|------|----------|
+| `analyze.py` | 纯正则扫 labels/screens/引用，**不执行** Ren'Py 代码：动态生成的 label、init python 里注册的 screen 都会漏 | 当线索而非结论；关键路径用 `label` 子命令交叉验证 |
+| `check_assets.py` | 只比对 `.rpy` 里字面量路径与磁盘文件，`Image("a.png", …)` 之外的构造式路径、运行时拼接路径查不到 | 孤设报告当清理线索，缺失报告优先信（漏报少） |
+| `sdk_common.py` | SDK 探测走「向上查找」，在 monorepo 里可能命中同仓库的另一个 SDK | 发现版本可疑时显式传 `--sdk` 覆盖 |
+| `optimize_assets.py` | 缺 pngquant/jpegoptim/ffmpeg 时**逐文件降级为复制**，但如实报告并以退出码 1 表示「一个都没优化成」 | 看结尾的「成功优化 N 个」，别看「处理结束」那行就以为压过了 |
+| `urm_install.py` | URM 安装/卸载/体检。**不下载**（第三方 URL 会漂移，代用户下是替它决定往游戏目录放可执行代码）；安装前门界：引擎 ≥6.99.14 + 非加密 .rpa（不满足直接拒绝）；卸载靠 `.urm_installed.json` 签名精确回滚，**绝不删未签名的文件**（用户手工放的 .rpy 会保留并提示）；URM 是 `.rpa` 而非 `.rpy`，别按 .rpy 方式处理 | 用户自行下载后 `--rpa <路径> --apply`；装上后游戏内按空格验证（quickmenu 齿轮图标）；**解不了画廊**（判据走 `_seen_ever`），开画廊用 unlock_patches.md |
+| `setup_fonts.py` | 生成的配置要跟 `add_fonts.py` 的注入路径配套，两套并存易打架 | 新项目走 `setup_i18n.py --font-mode`，老项目已注入字体就别再跑 detect/config |
+| `polish/` 三件套 | `extract_say` / `merge_polish` / `screen_suspicious` 是一条管线的三段，单跑任一段无意义；`screen_suspicious` 的 RULES 只覆盖常见翻译腔 | 整条跑；RULES 按项目文风增删 |
+| `linear_mode.py` | 975 行，三种模式（见下表），`modify` 只认 `get_event_list` + `Event(id=)` 事件表 | 先 `analyze` 再选方式 |
 
 ## 半通用条目的保守经验
 
 | 工具 | 边界 | 保守做法 |
 |------|------|----------|
-| `linear_mode.py` | **剧本门控（经验做法，未内置脚本）**：把路由标签 if/jump 链简化成「totaldays 达标 && 本天未播」写回剧本（FriendshipClub 式节点门控，需授权改原文件；条件简化会丢弃前置 flag → 剧情连续性可能有小跳跃）。**悬浮补丁（linear_mode.py add）**：单开关 + 回调顶层重定向；菜单仍需手点、repeatable 长对话场景不跳。**modify 专用**：只认 `get_event_list` + `Event(id=)` 事件表（LostInYou 自有机制）。add 的场景推导含 LostInYou 式桩标签与 `script.rpy` 命名假设（`--min-says/--include/--exclude/--list` 校正） | 先 `analyze` 再选方式；路由链集中在单标签 → 用剧本门控（自行改写剧本，不要找现成脚本）；不想改原文件 → 悬浮补丁；有事件表 → modify |
-| `unify_name_translations.py` (v6) | 核心通用（不猜测变体，全靠外部 glossary）；残留 SKIP_FILES 四个文件名、`DEFAULT_TL_DIR=game/tl/schinese`。旧版 `unify_names_v2.py` 已移除 | 换游戏传 `--tl-dir`；SKIP_FILES 残留无害但注意。术语表草稿先用 `统一名称/make_glossary.py` 生成 |
+| `linear_mode.py`（975 行，三种模式）| **剧本门控（经验做法，未内置脚本）**：把路由标签 if/jump 链简化成「totaldays 达标 && 本天未播」写回剧本（FriendshipClub 式节点门控，需授权改原文件；条件简化会丢弃前置 flag → 剧情连续性可能有小跳跃）。**悬浮补丁（linear_mode.py add）**：单开关 + 回调顶层重定向；菜单仍需手点、repeatable 长对话场景不跳。**modify 专用**：只认 `get_event_list` + `Event(id=)` 事件表（LostInYou 自有机制）。add 的场景推导含 LostInYou 式桩标签与 `script.rpy` 命名假设（`--min-says/--include/--exclude/--list` 校正） | 先 `analyze` 再选方式；路由链集中在单标签 → 用剧本门控（自行改写剧本，不要找现成脚本）；不想改原文件 → 悬浮补丁；有事件表 → modify |
+| `unify_name_translations.py` (v6) | 核心通用（不猜测变体，全靠外部 glossary）；残留 SKIP_FILES 四个文件名、`DEFAULT_TL_DIR=game/tl/schinese`。旧版 `unify_names_v2.py` 已移除 | 换游戏传 `--tl-dir`；SKIP_FILES 残留无害但注意。术语表草稿先用 `names/make_glossary.py` 生成 |
 | `make_glossary.py` | v3 只做确定性取证：Character 定义人名 → 草稿 JSON；strings 配对/碰撞/出现次数 → 证据 JSONL 与报告。**术语资格不脚本判定**，AI 略读流程见 translation_workflow.md「术语表精读」。判据学自 LinguaGacha glossary 技能（身份=资格，频率只是证据） | 草稿直接喂 `unify_name_translations.py` / `unify_names.py`；AI 判定后的定稿才合并进正式术语表 |
 | `autotranslate.py` | DEFAULT_CONFIG 不内置端点（`--api-url` 或环境变量 `RENPY_TRANSLATE_API_URL` 提供 OpenAI 兼容端点），`target_language="Simplified Chinese"` 默认简中，提示词是 Galgame 中文化专用 | 换语言对先改 DEFAULT_CONFIG；端点与密钥都走环境变量（`RENPY_TRANSLATE_API_URL` / `RENPY_TRANSLATE_API_KEY`） |
 | `sync_namebox_translation.py` | 默认目标 `script_translated.rpy`、术语表 `导出_术语表.xlsx` 是自家命名约定 | 永远先看试运行输出（默认不写，`--apply` 才落盘） |
 | `add_fonts.py` | 只认 setup_i18n 生成的 `fonts_common.rpy` 与 4 个自家 define 变量名 | 先跑 `setup_i18n.py`，否则拒绝写入是预期行为 |
 | `switch_default_language.py` | 依赖 setup_i18n 的 language_selector marker 注释格式 | 同上，配套使用 |
 | `fix_lang_button.py` | 只识别 `action Language("x")` 形态的语言按钮（含 `action [ Language(...) ]` 数组写法）；只注入/修复，不新建语言切换入口；按钮显式写明时可能读不到 | 默认试运行看报告；`--apply` 才落盘（自动 .bak）；无语言入口的项目先跑 setup_i18n；按钮文本只用字面量字符串才安全注入 |
-| `check_func_text.py` / `check_button_missing_translation.py` | `SCREEN_CALL_KW`（common.py）白名单含特定游戏 screen 名（`end_screen_text`/`reward_button`/`settings_item`/`tab_button`），换游戏漏报这些类目 | 新项目把该游戏的自定义 screen 名补进 `错误检测/common.py` 的 SCREEN_CALL_KW |
+| `check_func_text.py` / `check_button_missing_translation.py` | `SCREEN_CALL_KW`（common.py）内置的 screen 名（`game_menu`/`heading`/`settings_item`/`tab_button`）同样非 Ren'Py 标准组件，是历史项目验证过的自定义调用名；游戏用其他自定义名时会漏报 | 放项目根目录的 `checks/renpy_screen_calls.json`（见 `.example`），**不要改代码**。注意只匹配**带括号的调用**（`heading("…")`），字面量 `heading "…"` 不属于此规则 |
 | `lint_report.py` / `lint_rpy.py` | 语言已参数化但仍默认 schinese | 非简中项目必须显式传 `-l <lang>`，否则检测不到条目 |
 
 ## 专用条目（当经验，不当工具）

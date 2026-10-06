@@ -630,20 +630,20 @@ define gui.interface_text_font = "fonts/NotoSansSC-Regular.otf"
 
 | 问题 | 命令 | 工具 |
 |------|------|------|
-| `_` 被遮蔽/崩溃风险 | `python check_crash_risks.py <目录>` | 错误检测 |
+| `_` 被遮蔽/崩溃风险 | `python check_crash_risks.py <目录>` | checks |
 | UI 文本漏翻 | `python renpy-tools-cli.py ui <项目>` | CLI 入口 |
 | 翻译函数误用 (缺 !t 等) | `python renpy-tools-cli.py misuse <项目>` | CLI 入口 |
 | Python 函数文本漏翻 | `python renpy-tools-cli.py func <项目>` | CLI 入口 |
 | 交叉引用自动翻译 | `python renpy-tools-cli.py auto <项目>` | CLI 入口 |
-| 翻译完整性（标签/变量/换行） | `python check_translation_integrity.py <项目> -l schinese` | 翻译相关 |
-| 未翻译检测 | `python check_untranslated.py <项目> -l schinese --csv` | 翻译相关 |
-| 角色名同步 | `python sync_namebox_translation.py --project <项目>` | 翻译相关 |
-| 名字统一 | `python unify_name_translations.py` | 统一名称 |
-| 硬编码英文修补 | `python patch_renpy_say.py --project <项目> --replacements renpy_say_replacements.csv` | 翻译相关 |
-| SDK lint + 翻译专项 | `python lint_check.py <项目> --sdk <SDK路径>` | 错误检测 |
-| 按钮文本遗漏 | `python check_button_missing_translation.py <项目>` | 错误检测 |
-| 重复翻译 | `python check_duplicate_translations.py <项目>` | 错误检测 |
-| .rpy 格式检查 | `python lint_rpy.py <翻译目录>` | 错误检测 |
+| 翻译完整性（标签/变量/换行） | `python renpy-tools-cli.py integrity <项目> -l schinese` | CLI 入口 |
+| 未翻译检测 | `python renpy-tools-cli.py untranslated <项目> -l schinese --csv` | CLI 入口 |
+| 角色名同步 | `python sync_namebox_translation.py --project <项目>` | translate |
+| 名字统一 | `python unify_name_translations.py` | names |
+| 硬编码英文修补 | `python patch_renpy_say.py --project <项目> --replacements renpy_say_replacements.csv` | translate |
+| SDK lint + 翻译专项 | `python lint_check.py <项目> --sdk <SDK路径>` | checks |
+| 按钮文本遗漏 | `python check_button_missing_translation.py <项目>` | checks |
+| 重复翻译 | `python check_duplicate_translations.py <项目>` | checks |
+| .rpy 格式检查 | `python lint_rpy.py <翻译目录>` | checks |
 
 ---
 

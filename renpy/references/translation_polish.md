@@ -27,7 +27,7 @@
 5. **diff 回读**：初稿与润色稿逐行 diff，生成"行号｜原译文｜润色后"对照表供逐行接受/拒绝（VSCode diff 或脚本均可）。预期整行自动接受率约 60%，其余人工微调；被拒的行可选择性再丢给 AI 重润一次。
 6. **记录**：重大意译写入 `翻译结果.md` 的"意译与润色"章。
 
-回填沿用 `scripts/翻译相关/autotranslate.py apply` 的安全规则（.bak + 原子替换、标签/插值结构校验、`--overwrite` 才覆盖非空译文）。
+回填沿用 `scripts/translate/autotranslate.py apply` 的安全规则（.bak + 原子替换、标签/插值结构校验、`--overwrite` 才覆盖非空译文）。
 
 ## 策略一的可执行管线（脚本级，实测）
 
@@ -42,27 +42,44 @@
 ### 2. 回填
 
 ```
-python autotranslate.py apply <tl_dir> --input polish_batch01.json --overwrite --dry-run   # 先预览
-python autotranslate.py apply <tl_dir> --input polish_batch01.json --overwrite             # 实写（自动 .bak）
+python autotranslate.py apply <tl_dir> --input .cache/polish_batch01.json --overwrite --dry-run   # 先预览
+python autotranslate.py apply <tl_dir> --input .cache/polish_batch01.json --overwrite             # 实写（自动 .bak）
 ```
 
 `--overwrite` 是必须的（润色覆盖非空译文）；默认 `--dry-run` 先跑一遍核对 SKIP 数。安全网：`line` 处的原文注释必须与 `orig` 完全一致才落笔，不一致/标签结构损坏自动跳过——所以**批次 JSON 里必须带准确的 file+line+orig**，不能只给新旧译文对。
 
 ### 3. 批次状态
 
-润色跨多个会话/多天时，在工作区维护 `polish_state.json`（已完成批次号、每批 file 范围与行数、待重润行列表），避免重复润色。68k 行级项目不要指望一轮跑完。
+润色跨多个会话/多天时，在 `<项目根>/.cache/polish_state.json` 维护批次状态（已完成批次号、每批 file 范围与行数、待重润行列表），避免重复润色。68k 行级项目不要指望一轮跑完。批次 JSON 与状态账本都放 `.cache/`（统一落盘约定见 [translation_workflow.md](translation_workflow.md) 2.5 第 1 步）——临时目录会被清空，账本一丢就等于从头重润。
 
 ### 4. 本地筛行规则（局部润色档的"可疑行"定义）
 
-零 token 先跑：`tl_check.py`（崩溃/显示级先修）→ `check_duplicate_translations.py`（同句异译=术语漂移）→ `check_untranslated.py`（空译文/new==old）。再按需加规则筛：连续多个"的"、`被` 字被动直译、英文单词残留（人名除外）、`是否/如果…的话` 翻译腔高频词、单句超长无标点。筛出来的行按 file 分组进批次。
+零 token 先跑：`tl_check.py`（崩溃/显示级先修）→ `check_duplicate_translations.py`（同句异译=术语漂移）→ `check_untranslated.py`（空译文/new==old）。再跑两个现成筛行器（polish/ 下，零 token）：
 
-### 5. 原子化工具族（已内置：`scripts/润色/`）
+- `screen_suspicious.py`：翻译腔可疑行（连续多个"的"、`被` 字被动直译、`是否/如果…的话` 高频词、单句超长无标点；规则在顶部 RULES 增删）。**注意默认 `--min-score 3` 会漏掉只命中一条低权重规则的行**——专项排查夹生词时降阈值。
+- `screen_quality.py`：硬性质可疑行（外文残留夹生词、假名残片、半角标点、相似度漏翻；已内置单字母/大写缩写/免翻短语豁免，详见 polish/README.md）。
 
-上述管线已拆成单一职责小工具，用法与实测注意（strings 冲突、名字框机制、原版标签 bug 假阳性、裸 `%`）详见 `scripts/润色/README.md`：`extract_say.py`（全量条目+锚点）→ `screen_suspicious.py`（规则筛行，规则在顶部 RULES 增删）→ `../统一名称/unify_names.py`（术语表人名统一，已归入统一名称组）→ `merge_polish.py`（AI 只写 `file:line → 新译文`，锚点自动补齐）→ `autotranslate.py apply --overwrite` 回填。
+筛出来的行按 file 分组进批次；两组输出锚点结构相同，可合并处理。
+
+### 5. 原子化工具族（已内置：`scripts/polish/`）
+
+上述管线已拆成单一职责小工具，用法与实测注意（strings 冲突、名字框机制、原版标签 bug 假阳性、裸 `%`）详见 `scripts/polish/README.md`：`extract_say.py`（全量条目+锚点）→ `screen_suspicious.py`（翻译腔筛行）+ `screen_quality.py`（硬性质筛行，规则经验移植自 LinguaGacha）→ `../names/unify_names.py`（术语表人名统一，已归入统一名称组）→ `merge_polish.py`（AI 只写 `file:line → 新译文`，锚点自动补齐）→ `autotranslate.py apply --overwrite` 回填。
+
+### 6. 种子驱动探查（方法论吸收自 LinguaGacha item-review 审校技能）
+
+来源：LinguaGacha `builtin/skills/translation/references/item-review.md`（2026-10 摘录自其 main 分支）。核心思想：**润色/校对不是一轮线性扫描，而是自启发循环**——每轮从上一轮的发现里提炼可检索的"种子"（特征模式/具体线索），用种子定位下一批调查目标，直到种子耗尽；至少 3 轮。落地到 Ren'Py 汉化：
+
+1. **种子来源**：初始种子 = 两个筛行器的命中 + 用户 complaint；每轮探查后提炼新种子（发现"每日"漏译 → 全库检索 `毎日`；发现某角色译名漂移 → 检索该角色全部别名；发现某类 `{tag}` 被误翻 → 检索同类结构）。
+2. **探查方向**（其原文归纳）：扩展同类（从单个错误提取特征找相似行）、核验差异（同词异译是否符合各自语境）、追查关联（术语/别名确认后复核受影响条目）。
+3. **警告判断重点**：每类筛行命中不直接改，先核验再动笔——外文残留→查局部漏翻还是刻意保留（人名/拟声）；相似度→查是否漏翻还是翻译腔重写；假名→查是否日文台词刻意保留；术语命中→查当前语境是否适用术语条件。
+4. **账本**：跨会话/多天的大项目在 `polish_state.json` 里记种子清单（pattern + consumed 状态），与已有批次记录并列。
+5. **边界**：种子循环是**探查循环**，不是对同一行反复润色——策略一的实测结论"润色只做一轮，越润越差"不变；种子扩大的是**调查范围**，不是单行重润次数。
 
 ## 策略二：LinguaGacha 路线
 
-本机已装 `D:\workplace\LinguaGacha_v0.124.1_Windows_x64`。注意：**LinguaGacha 没有"润色"功能**（已核实其 main 分支技能清单：translation/glossary/text-preserve/writing-guide 等，无 polish），替代做法两条：
+本机已装 `D:\workplace\LinguaGacha_v0.124.1_Windows_x64`。注意：**LinguaGacha 没有"polish"功能**（已核实其 main 分支技能清单：translation/glossary/text-preserve/writing-guide 等，无 polish），替代做法两条：
+
+> 2026-10-06 更新：其**质量判定经验已移植**成本仓库 `scripts/polish/screen_quality.py`（外文残留聚合+豁免、相似度漏翻 Jaccard、免翻清单；出处见该脚本头部注释），用本仓库管线即可获得同款硬性质校，不必为此启动 LG 本体。
 
 1. **风格前置（0 额外 token）**：文本导入 → 翻译指令挂内置风格预设（"文言文风格""文学措辞风格"）或自定义文风 prompt → 重翻。效果等于"翻译时就润"，适合还没翻或愿意重翻的项目。
 2. **Agent 审校当润色器（按范围耗 token）**：对其 `item-review` / `page-review` 审校技能下明确指令——"对指定范围按 XX 风格润色，保留术语表条目和占位符"。该技能默认原则是"程序化批量探查优先，仅在无法程序化探查时动用模型"，所以 token 只花在有疑点的条目上；配合其 glossary（术语表）保证一致性。

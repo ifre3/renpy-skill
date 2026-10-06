@@ -50,6 +50,12 @@ translate chinese python:
 
 **原理**: `config.font_replacement_map` 可以让 Ren'Py 在加载指定字体时，无感替换成你提供的字体。适合汉化时**不修改原脚本**。
 
+> ⚠️ **方法 2 的边界（AfterDark 0.26 实测踩坑）**：若游戏自己在 say/preferences 屏里
+> 写了 `font persistent.xxx`（无障碍字体机制、显示时求值），它的优先级**高于**
+> translate style/python 的覆盖——表现为「按钮正常、对白异常」。
+> `check_fonts.py` 会检测这种机制并预警；解法是把该行表达式改成语言感知：
+> `font ("Fonts/SourceHanSansLite.ttf" if _preferences.language == "schinese" else persistent.pref_text_font)`
+
 ### 方法 3：语言实时切换字体（用户可选字体）
 
 ```renpy

@@ -25,6 +25,13 @@
 
 ## 行为细节
 
+- 递归扫描 `tl/<lang>/` 全部子目录（发行项目常按 game/ 目录镜像分层，如
+  `Girls Scripts/`），报告里的文件标识是相对 tl 的路径；只扫顶层的旧版会
+  漏掉大多数翻译文件（实测 AfterDark 0.26：顶层 10 个 vs 实际 70 个）。
+- 识别项目自定义文本标签：`config.custom_text_tags["x"]` /
+  `renpy.register_text_tag("x")` 并入已知标签，`config.self_closing_custom_text_tags`
+  按不接受关闭处理——动态文本游戏（kinetic_text_tags 类）的 `{chaos}`/`{bt}`
+  不再误报"未知标签/关闭无开放标签"。
 - 按引擎源码模拟：标签大小写敏感、花括号内空格不剥离。
 - 说话人正则支持带点表达式（`mc.name`）、下标（`the_group[0]`）、引号字面量（`"Janitor"`）——Lab Rats 2 类游戏台词不再漏检。
 - `--fix` 自动修机械性问题：`%(变量名被翻)` 还原、`{ i }`/`{/B}` 规范化。
