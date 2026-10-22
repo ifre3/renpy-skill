@@ -26,6 +26,7 @@ from pathlib import Path
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _TOOLS = os.path.dirname(_HERE)
 _SDK = os.path.join(_TOOLS, "sdk")
+_CHECK = os.path.join(_TOOLS, "checks")
 _SHARED = os.path.join(_TOOLS, "shared")
 if _SHARED not in sys.path:
     sys.path.insert(0, _SHARED)
@@ -41,8 +42,8 @@ def _load(name, path):
 class _ToolCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.fonts = _load("_check_fonts", os.path.join(_SDK, "check_fonts.py"))
-        cls.i18n = _load("_check_i18n", os.path.join(_SDK, "check_i18n.py"))
+        cls.fonts = _load("_check_fonts", os.path.join(_CHECK, "check_fonts.py"))
+        cls.i18n = _load("_check_i18n", os.path.join(_CHECK, "check_i18n.py"))
 
     def _run_tool(self, mod, path):
         """跑工具 main()，返回 (exit_code, stdout)。argparse 吃 sys.argv。"""
@@ -96,6 +97,38 @@ class TestCheckFonts(_ToolCase):
         self._script('define gui.text_font = "DejaVuSans.ttf"')
         rc, _ = self._run_tool(self.fonts, self.root)
         self.assertEqual(rc, 0)
+
+    def test_bare_string_frm_value_flagged(self):
+        """font_replacement_map 值是裸字符串 → 渲染期 ValueError，必须拦下。
+
+        Dissonance 0.14 实录：主菜单首次渲染抛
+        "too many values to unpack (expected 3)"（引擎 get_font() 三元解包），
+        而 renpy lint 查不出（渲染期错误，不是解析期）。"""
+        self._script(
+            'init python:\n'
+            '    config.font_replacement_map[("DejaVuSans.ttf", False, False)] = "ptsan.ttf"')
+        rc, out = self._run_tool(self.fonts, self.root)
+        self.assertEqual(rc, 1)
+        self.assertIn("font_replacement_map", out)
+        self.assertIn("expected 3", out)
+
+    def test_tuple_frm_value_passes(self):
+        """三元组右值（正确写法）不该被误报。"""
+        self._script(
+            'init python:\n'
+            '    config.font_replacement_map[("DejaVuSans.ttf", False, False)] = ("ptsan.ttf", False, False)')
+        rc, out = self._run_tool(self.fonts, self.root)
+        self.assertNotIn("不是三元组", out)
+
+    def test_frm_value_predicate(self):
+        """_frm_value_ok 的判定边界：只有长度 3 的元组/列表算安全。"""
+        f = self.fonts._frm_value_ok
+        self.assertFalse(f('"fonts/msyh.ttc"'))
+        self.assertFalse(f("('a.ttf', True)"))       # 长度 2 同样会崩
+        self.assertFalse(f("('a.ttf',)"))            # 长度 1
+        self.assertTrue(f("('a.ttf', _b, _i)"))
+        self.assertTrue(f("('a.ttf', True, False)"))
+        self.assertTrue(f("_some_var"))              # 静态不可判定 → 放行不误报
 
     def test_cjk_lang_without_font_warns(self):
         """有 schinese 翻译但全项目无 CJK 字体 → 显示级问题，退出码 1。"""
@@ -216,6 +249,88 @@ class TestCheckI18n(_ToolCase):
         rc, out = self._run_tool(self.i18n, self.root)
         self.assertEqual(rc, 1)
         self.assertIn("没有 tl 目录", out)
+
+    def test_config_language_with_switch_entry_warns(self):
+        """有切换入口还设 config.language → 玩家选的语言每次启动被覆盖回去。
+
+        引擎 _init_language() 算 `RENPY_LANGUAGE or config.language or
+        _preferences.language`，config.language 优先级高于玩家选择。"""
+        tl = self.game / "tl" / "schinese"
+        tl.mkdir(parents=True)
+        (tl / "a.rpy").write_text(
+            'translate schinese strings:\n    old "Start"\n    new "开始"\n',
+            encoding="utf-8")
+        self._script('define config.language = "schinese"\n'
+                     'textbutton "EN" action Language(None)')
+        rc, out = self._run_tool(self.i18n, self.root)
+        self.assertEqual(rc, 1)
+        self.assertIn("优先级高于玩家选择", out)
+        self.assertIn("config.default_language", out)
+
+    def test_config_default_language_is_safe(self):
+        """config.default_language 只设初值、玩家可改 → 不该报警。"""
+        tl = self.game / "tl" / "schinese"
+        tl.mkdir(parents=True)
+        (tl / "a.rpy").write_text(
+            'translate schinese strings:\n    old "Start"\n    new "开始"\n',
+            encoding="utf-8")
+        self._script('define config.default_language = "schinese"\n'
+                     'textbutton "ZH" action Language("schinese")\n'
+                     'textbutton "EN" action Language(None)')
+        rc, out = self._run_tool(self.i18n, self.root)
+        self.assertEqual(rc, 0)
+        self.assertIn("config.default_language", out)
+        self.assertNotIn("优先级高于玩家选择", out)
+
+    def test_replace_text_hook_coexisting_with_tl_warns(self):
+        """钩子与 tl/ 并存：切成英文时 tl 撤了钩子还在 → 必须报。"""
+        tl = self.game / "tl" / "schinese"
+        tl.mkdir(parents=True)
+        (tl / "a.rpy").write_text(
+            'translate schinese strings:\n    old "Start"\n    new "开始"\n',
+            encoding="utf-8")
+        self._script('config.replace_text = translate_text\n'
+                     'textbutton "ZH" action Language("schinese")')
+        rc, out = self._run_tool(self.i18n, self.root)
+        self.assertEqual(rc, 1)
+        self.assertIn("config.replace_text", out)
+        self.assertIn("并存", out)
+
+    def _tl(self, lang="schinese"):
+        """建一个最小 tl/<lang>/ 目录（让工具进入多语言分支）。"""
+        tl = self.game / "tl" / lang
+        tl.mkdir(parents=True)
+        (tl / "a.rpy").write_text(
+            'translate %s strings:\n    old "Start"\n    new "开始"\n' % lang,
+            encoding="utf-8")
+        return tl
+
+    def test_replace_text_hook_without_tl_is_informative(self):
+        """无 tl/ 而中文全靠钩子（第三方机翻典型形态）→ 点名并指向文档。
+
+        注意：无 tl/ 且无切换代码时工具会提前返回，所以这里要补一个
+        Language() 入口让它进入多语言分支——真实机翻项目正是这样：
+        没有 tl，但可能残留切换代码。"""
+        self._script('config.replace_text = translate_text\n'
+                     'textbutton "ZH" action Language("schinese")')
+        rc, out = self._run_tool(self.i18n, self.root)
+        self.assertEqual(rc, 1)
+        self.assertIn("中文完全依赖此钩子", out)
+
+    def test_obfuscated_payload_flagged(self):
+        """exec(zlib.decompress(...)) 混淆载荷要点名，且提示别整块删。"""
+        self._tl()
+        self._script('exec(zlib.decompress(zlib.decompress(f.read())))')
+        rc, out = self._run_tool(self.i18n, self.root)
+        self.assertEqual(rc, 1)
+        self.assertIn("混淆加载", out)
+
+    def test_no_hook_is_clean(self):
+        """没有钩子时该节应明确报干净，而不是空着。"""
+        self._tl()
+        self._script('define config.default_language = "schinese"')
+        rc, out = self._run_tool(self.i18n, self.root)
+        self.assertIn("汉化只走 tl/", out)
 
     def test_missing_strings_block_is_hint_only(self):
         """无 strings 块只影响引擎自带界面文案，属提示级，不进退出码。"""

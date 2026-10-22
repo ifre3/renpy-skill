@@ -253,6 +253,10 @@ def print_report(all_rpy, tl_dir, strict):
             f"Total: {total_untranslated} untranslated ({total_empty} empty, {total_untranslated - total_empty} same)"
         )
         print(f"Files: {len(file_summary)}")
+        if total_untranslated:
+            # 交叉说明：tlcheck 也会报空译文，别让人以为重复报警后二选一。
+            print("\n注：空译文在 `all` 里 tlcheck 也会报（它按句比对 old/new 并分级）。")
+            print("    本工具更快且支持 --csv；要自动修复用 tlcheck --fix。")
         for rel_path, items in file_summary:
             empty_count = sum(1 for it in items if it.get("empty"))
             same_count = len(items) - empty_count

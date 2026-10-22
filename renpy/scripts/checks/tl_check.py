@@ -20,6 +20,15 @@ tl_check.py — Ren'Py 翻译文件静态质检器 v3
   [提示] 不影响运行：new 与 old 完全相同的未翻译行、裸 %（Ren'Py 8 对白
          不做 % 格式化，裸 % 是字面量，通常安全；--fix 也不再动它）
 
+可选检查（默认关闭，显式传参才跑；思路取自 AiNiee 的 TranslationChecker）：
+  --glossary <术语表>   术语一致性：原文命中词条、译文却没出现定稿译名 →
+                        [术语] 术语未落实。支持 .xlsx（三栏 原文|译文|备注，
+                        zipfile+ElementTree 零依赖读取）/ .jsonl / .json。
+  --lang-ratio <阈值>   语言不匹配分块判定：按 20 行分块统计「看得出是目标
+                        语言」的行占比，低于阈值 → [显示] 语言不匹配。
+                        纯启发式（假名/谚文/CJK/拉丁字母），不是语言模型，
+                        所以只做块级判定，单行误判会被窗口稀释。
+
 鲁棒性说明：
   - 说话人识别支持带点表达式（mc.name，Lab Rats 2 类游戏占台词两成）、
     下标（the_group[0]）、引号字面量（"Janitor"，动态角色名）——以前只认
@@ -35,12 +44,14 @@ tl_check.py — Ren'Py 翻译文件静态质检器 v3
 用法:
   python tl_check.py <项目根目录或game目录> [--lang schinese] [--fix]
                      [--add-tflag] [--max-examples N]
+                     [--glossary 术语表.xlsx] [--lang-ratio 0.75]
 
-退出码: 0=无崩溃/显示问题(可有提示级), 1=有崩溃或显示问题, 2=路径错误
+退出码: 0=无崩溃/显示/术语问题(可有提示级), 1=有, 2=路径或输入错误
 """
 
 import argparse
 import ast
+import json
 import os
 import re
 import sys
@@ -48,6 +59,14 @@ from pathlib import Path
 
 # shared/rpy_syntax 提供嵌套+字符串感知的插值扫描；不可用时退回单层正则
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "shared"))
+# 检查器契约层（门面据此发现 name/summary/takes/requires_tl）
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "shared"))
+try:
+    from base_checker import PROJECT, BaseChecker
+except ImportError:  # 独立拷贝运行时降级：无 CHECKER，门面也发现不了它
+    PROJECT, BaseChecker = "project", object
+# 同目录模块（tag_repair 等）在被当作脚本直接启动时也要能 import
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from rpy_syntax import iter_bracket_groups as _iter_bracket_groups
     from rpy_syntax import find_string_literal, replace_literal_content
@@ -55,6 +74,11 @@ except ImportError:  # 独立拷贝运行时退化为内置实现
     _iter_bracket_groups = None
     find_string_literal = None
     replace_literal_content = None
+# 写回安全网：--fix 落盘前确保同目录 .bak（fail-closed），与其余写工具一致
+try:
+    from backup import atomic_write_text as _atomic_write_text
+except ImportError:  # 独立拷贝运行时退化为直接写
+    _atomic_write_text = None
 
 VALID_FORMAT_TYPES = set("srdiouxXeEfFgGca%")
 TRANSLATE_RE = re.compile(r"^translate\s+(\w+)(?:\s+(\w+))?\s*:\s*$")
@@ -180,6 +204,16 @@ def pct_specs(s: str):
         out.append((m.group(0), m.group(2), m.group(3)))
         i = m.end()
     return out
+
+
+def _old_escapes_pct(old: str) -> bool:
+    """原文里是否把字面百分号写成了 %%。
+
+    用于区分「译文漏转义（翻译引入的崩溃）」和「原作自己就没转义
+    （上游 bug，译文照抄不算错）」。原文出现 %% 即证明这个 % 是字面量，
+    作者知道要转义 —— 译文漏掉一个 % 就是翻译的锅。
+    """
+    return "%%" in (old or "")
 
 
 def interp_keys(s: str):
@@ -348,7 +382,188 @@ def latin_words(s: str):
     return re.search(r"[A-Za-z]{3,}", s) is not None
 
 
-def compare(old: str, new: str, ctx: str, issues: list, kana_check=True):
+# ---- 术语一致性（--glossary）：原文命中词条 → 译文必须含定稿译名 ----
+
+# 表头行（AI 定稿/AiNiee 导出的首行）不该被当成词条
+_GLOSSARY_HEADER = {"原文", "源文", "source", "src", "term", "en"}
+_GLOSSARY_HEADER_DST = {"译文", "dst", "translation", "zh", "new"}
+# 纯 ASCII 词条走整词边界匹配；含非 ASCII（日文/符号）的走子串
+_ASCII_TERM_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 .,_'\-&!?]*$")
+
+
+def _xlsx_col_index(ref: str) -> int:
+    """xlsx 单元格引用 'B7' → 1（0 基列号）。"""
+    n = 0
+    for ch in ref:
+        if not ch.isalpha():
+            break
+        n = n * 26 + (ord(ch.upper()) - 64)
+    return n - 1
+
+
+def read_xlsx_rows(path: Path):
+    """零依赖读 xlsx 首个工作表 → [[cell, ...], ...]；读不出返回 None。
+
+    xlsx 本质是 zip + XML，用标准库（zipfile + ElementTree）就能读，不必
+    为此引入 openpyxl 依赖——本套工具的定位是纯标准库。只认常规形态：
+    sharedStrings 索引字符串、内联字符串、数字/普通文本。
+    """
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    try:
+        with zipfile.ZipFile(path) as z:
+            names = set(z.namelist())
+            shared = []
+            if "xl/sharedStrings.xml" in names:
+                root = ET.fromstring(z.read("xl/sharedStrings.xml"))
+                for si in root.iter(f"{ns}si"):
+                    shared.append("".join(t.text or "" for t in si.iter(f"{ns}t")))
+            sheet = next(
+                (n for n in sorted(names)
+                 if n.startswith("xl/worksheets/") and n.endswith(".xml")),
+                None,
+            )
+            if sheet is None:
+                return None
+            root = ET.fromstring(z.read(sheet))
+            rows = []
+            for row in root.iter(f"{ns}row"):
+                cells: dict = {}
+                for i, c in enumerate(row.findall(f"{ns}c")):
+                    ref = c.get("r") or ""
+                    col = _xlsx_col_index(ref) if ref else i
+                    ctype = c.get("t")
+                    if ctype == "inlineStr":
+                        holder = c.find(f"{ns}is")
+                        value = ("" if holder is None else
+                                 "".join(t.text or "" for t in holder.iter(f"{ns}t")))
+                    else:
+                        v = c.find(f"{ns}v")
+                        raw = (v.text or "") if v is not None and v.text else ""
+                        if ctype == "s" and raw.isdigit() and int(raw) < len(shared):
+                            value = shared[int(raw)]
+                        else:
+                            value = raw
+                    cells[col] = value
+                if cells:
+                    rows.append([cells.get(i, "") for i in range(max(cells) + 1)])
+            return rows
+    except Exception:  # zip/Xml 结构不符一律当读不出，交给调用方报错
+        return None
+
+
+def load_glossary_terms(path):
+    """读术语表 → [(src, dst, matcher)]（去重保序）。
+
+    --glossary 是用户显式点名的输入，读不出就 fail-closed 退出——静默跳过
+    会让检查变成假绿。空 dst 的行（资格待定）丢弃：没有「定稿译名」就无从
+    核对一致性。单字母 ASCII 词条（I/a）匹配面太宽，一律不收。
+    """
+    p = Path(path)
+    if not p.is_file():
+        print(f"[错误] 术语表不存在: {path}", file=sys.stderr)
+        sys.exit(2)
+
+    rows = []
+    if p.suffix.lower() == ".xlsx":
+        table = read_xlsx_rows(p)
+        if table is None:
+            print(f"[错误] 读不出 xlsx 术语表: {path}"
+                  f"（可将它在表格软件里另存为 JSON/JSONL 后再传 --glossary）",
+                  file=sys.stderr)
+            sys.exit(2)
+        for r in table:
+            src = (r[0] if len(r) > 0 else "").strip()
+            dst = (r[1] if len(r) > 1 else "").strip()
+            if not src:
+                continue
+            if src.lower() in _GLOSSARY_HEADER or dst.lower() in _GLOSSARY_HEADER_DST:
+                continue  # 表头行
+            rows.append((src, dst))
+    else:
+        try:
+            text = p.read_text(encoding="utf-8-sig", errors="replace")
+        except OSError as e:
+            print(f"[错误] 读术语表失败 {path}: {e}", file=sys.stderr)
+            sys.exit(2)
+        if p.suffix.lower() == ".jsonl":
+            objs = []
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    objs.append(json.loads(line))
+                except ValueError:
+                    continue
+        else:
+            try:
+                data = json.loads(text)
+            except ValueError as e:
+                print(f"[错误] 术语表不是合法 JSON/JSONL: {path} ({e})", file=sys.stderr)
+                sys.exit(2)
+            if isinstance(data, dict):
+                rows.extend((str(k).strip(), str(v or "").strip())
+                            for k, v in data.items())
+                objs = []
+            else:
+                objs = data if isinstance(data, list) else []
+        for o in objs:
+            if not isinstance(o, dict):
+                continue
+            src = str(o.get("src") or o.get("en") or o.get("old") or "").strip()
+            dst = str(o.get("dst") or o.get("zh") or o.get("new") or "").strip()
+            if src:
+                rows.append((src, dst))
+
+    terms, seen = [], set()
+    for src, dst in rows:
+        if not src or not dst or src in seen:
+            continue
+        if len(src) < 2 and src.isascii():  # "I"/"a" 这类匹配面过宽
+            continue
+        seen.add(src)
+        terms.append((src, dst, _term_matcher(src)))
+    return terms
+
+
+def _term_matcher(src: str):
+    """词条匹配器：纯 ASCII 走整词边界、大小写不敏感；其余走原样子串。
+
+    整词边界是必需的——术语表里的 "Ann" 不能命中原文的 "Announce"
+    （与 AiNiee 术语检查的 whole_word 选项同一目的）。
+    """
+    if _ASCII_TERM_RE.match(src):
+        return re.compile(r"(?<![0-9A-Za-z])" + re.escape(src) + r"(?![0-9A-Za-z])",
+                          re.IGNORECASE)
+    return re.compile(re.escape(src))
+
+
+def check_terms(old: str, new: str, ctx: str, issues: list, terms):
+    """术语一致性：原文命中词条、译文却没出现定稿译名 → [术语] 术语未落实。
+
+    只查「原文有、译名没有」这一个方向：译名出现即达标，不追究位置，也不
+    追究是否带括注（"艾琳（Eileen）" 仍算用了定稿译名）。
+    """
+    if not terms or not old.strip() or not new.strip():
+        return
+    old_lower = old.lower()
+    for src, dst, matcher in terms:
+        if dst in new:
+            continue
+        # 廉价预筛，避免大术语表 × 大工程时做几十万次正则：命中必须包含首字符，
+        # 且不可能比原文还长（两条都只可能漏掉不可能命中的词条，不会漏报）
+        if len(src) > len(old) or src[0].lower() not in old_lower:
+            continue
+        if matcher.search(old):
+            issues.append((ctx, "术语", "术语未落实",
+                           f'原文含 "{src}"，译文未见定稿译名 "{dst}"'))
+
+
+def compare(old: str, new: str, ctx: str, issues: list, kana_check=True,
+            terms=None, lang_rows=None):
     """old==new 的条目走未翻译统计，这里只查差异问题。"""
     if not old.strip():
         return  # old 为空串的配对（如语音占位行）没有参照物
@@ -357,6 +572,10 @@ def compare(old: str, new: str, ctx: str, issues: list, kana_check=True):
         short = old[:36] + ("..." if len(old) > 36 else "")
         issues.append((ctx, "显示", "空译文", f'old="{short}"'))
         return
+    # 语言分块判定的样本：new==old 的未翻译行不进（那是「未翻译」通道的活），
+    # 空译文也不进（没有可判定的内容）
+    if lang_rows is not None:
+        lang_rows.append((ctx, new))
     # 0. 未闭合 [（崩溃级；原文本身未闭合是源头错误，豁免译文）
     if brackets_unbalanced(new) and not brackets_unbalanced(old):
         issues.append((ctx, "崩溃", "未闭合[插值",
@@ -379,6 +598,22 @@ def compare(old: str, new: str, ctx: str, issues: list, kana_check=True):
     nn = [(n, t) for _, n, t in np_ if n is not None]
     if on != nn:
         issues.append((ctx, "崩溃", "%(name)s格式符新旧不匹配", f"old={on} new={nn}"))
+    # 1b. 裸 % 后跟非合法类型字符 —— 真崩溃源。
+    #     Ren'Py 对白走 `%` 格式化（renpy/text/text.py 的 Text 会做
+    #     substitute），"90%确定" 里 %确 被当成转换说明符 →
+    #     "Unknown string format code '%确'"。字面百分号必须写成 %%。
+    #     判据：原文里同样的 % 是 %% 转义，译文却漏成一个 → 必然崩。
+    #     原文自己就没转义（原作 bug）时豁免，译文不背锅。
+    for full, name, tch in np_:
+        if name is not None:
+            continue                      # %(name)x 由上面两条规则覆盖
+        # 原文用 %% 说明这个 % 是字面量 → 译文漏成一个就该报；
+        # 原文自己没转义（原作 bug）时豁免，译文照抄不背锅。
+        if tch not in VALID_FORMAT_TYPES and _old_escapes_pct(old):
+            issues.append((ctx, "崩溃", "裸%未转义",
+                           f'"{full}" 会被引擎当作格式串解析并抛 '
+                           f'"Unknown string format code \'{full}\'"；'
+                           f'字面百分号应写成 "%%"'))
     # 2. [] 插值：剥掉尾部旗标（!t/!q…）后比核心表达式——译文给插值补
     #    !t 是合法修复（见 --add-tflag），删掉原文旗标才是真问题（值通道断）
     o_map: dict = {}
@@ -395,6 +630,22 @@ def compare(old: str, new: str, ctx: str, issues: list, kana_check=True):
         detail = ((f"缺 {sorted(missing)} " if missing else "") +
                   (f"多 {sorted(extra)}" if extra else "")).strip()
         issues.append((ctx, "显示", "[]插值不匹配", detail))
+    # 2.5 崩溃级：译文里凭空出现的 [中文] 之类伪插值。上面的"多"只做新旧差集，
+    #     但引擎不比对——任何 [...] 都会被 renpy.substitutions 当 Python 表达式
+    #     eval。译者想把语气词"嗯"写成 [嗯] 就会 NameError 闪退（原句是纯文本
+    #     时应直接写 嗯，字面方括号须转义成 [[）。这里用"非 ASCII 标识符"判定：
+    #     合法的插值核心只会是变量/属性/下标等 ASCII 组合。
+    for core in set(n_map):
+        base = core.split("!")[0].strip()
+        if not base:
+            continue
+        # 剥掉字符串字面量与数字后仍有非 ASCII 字母 → 必是伪插值
+        stripped = re.sub(r'"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'', "", base)
+        stripped = re.sub(r"\d+(?:\.\d+)?", "", stripped)
+        if re.search(r"[^\x00-\x7F]", stripped):
+            issues.append((ctx, "崩溃", "伪插值[非ASCII]",
+                           f'[{core}] 会被当作 Python 表达式求值而抛 NameError；'
+                           f'想输出字面方括号请写成 [[，只想加语气词则去掉括号'))
     lost_flags = [c for c in set(o_map) & set(n_map)
                   if any(o_map[c]) and not any(n_map[c])]
     if lost_flags:
@@ -428,11 +679,97 @@ def compare(old: str, new: str, ctx: str, issues: list, kana_check=True):
             issues.append((ctx, "显示", "残留日文假名",
                            "译文含假名残片 " + "、".join(f'"{r}"' for r in runs)
                            + "，机翻/人工漏翻；若是刻意保留的日文台词请人工确认"))
+    # 6. 术语一致性（--glossary 才跑；放在最后，不影响上面 crash_here 的切片判定）
+    check_terms(old, new, ctx, issues, terms)
+
+
+# ---- 语言不匹配分块判定（--lang-ratio，默认关闭） ----
+# 用字符集做启发式语言判定，不引入语言模型：本套工具是纯标准库零依赖定位。
+_HANGUL_RE = re.compile(r"[\u1100-\u11ff\uac00-\ud7af]")
+_CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+_LATIN_RE = re.compile(r"[A-Za-z]")
+
+# --lang 值 → 语言族；不在表内的目标语言不做该项（别的语言没有可靠启发式）
+_TARGET_LANG_FAMILY = {
+    "schinese": "zh", "simplified_chinese": "zh", "chinese": "zh",
+    "tchinese": "zh", "traditional_chinese": "zh",
+    "japanese": "ja", "korean": "ko", "english": "latin",
+}
+
+
+def target_lang_family(lang: str):
+    return _TARGET_LANG_FAMILY.get((lang or "").strip().lower().replace("-", "_"))
+
+
+def _has_language_info(text: str) -> bool:
+    """该行是否值得参与语言判定（纯数字/符号行没有语言信息）。"""
+    if has_kana(text) or _HANGUL_RE.search(text) or _CJK_RE.search(text):
+        return True
+    return len(_LATIN_RE.findall(text)) >= 3
+
+
+def _is_target_text(text: str, family: str) -> bool:
+    """一行译文是否看得出是目标语言（启发式）。"""
+    kana = has_kana(text)
+    hangul = _HANGUL_RE.search(text) is not None
+    cjk = _CJK_RE.search(text) is not None
+    latin = len(_LATIN_RE.findall(text))
+    if family == "ja":
+        # 汉字行在日语里也常见，但纯英文字母行不算；含谚文则不是日语
+        return kana or (cjk and not hangul and latin == 0)
+    if family == "ko":
+        return hangul
+    if family == "zh":
+        # 夹假名 → 是日文残留，不算达标（与 [显示] 残留日文假名同口径）
+        return cjk and not kana
+    if family == "latin":
+        letters = (latin + len(_HANGUL_RE.findall(text))
+                   + len(_CJK_RE.findall(text)) + len(KANA_RE.findall(text)))
+        return latin >= 3 and latin >= letters * 0.6
+    return True
+
+
+def lang_ratio_issues(rows, family, threshold, chunk=20, min_block=None):
+    """按块统计目标语言占比，低于阈值的块报 [显示] 语言不匹配。
+
+    rows 是 (ctx, 译文) 列表，ctx 形如 "文件.rpy:120"。只做块级判定——
+    启发式单行误判（如中文句里夹一个英文单词）在 20 行窗口里会被稀释；
+    块内有效样本不足时不判（样本太少，报出来就是噪音）。
+    """
+    min_block = min_block or max(3, chunk // 4)
+    by_file: dict = {}
+    for ctx, text in rows:
+        label, _, lineno = ctx.rpartition(":")
+        by_file.setdefault(label, []).append((lineno, text))
+
+    out = []
+    for label, items in by_file.items():
+        checkable = [(ln, t) for ln, t in items if _has_language_info(t)]
+        for i in range(0, len(checkable), chunk):
+            block = checkable[i:i + chunk]
+            if len(block) < min_block:
+                continue
+            bad = [(ln, t) for ln, t in block if not _is_target_text(t, family)]
+            ratio = (len(block) - len(bad)) / len(block)
+            if ratio >= threshold:
+                continue
+            sample = "；".join(f"{ln} {t.strip()[:24]}" for ln, t in bad[:3])
+            out.append((
+                f"{label} 行 {block[0][0]}-{block[-1][0]}", "显示", "语言不匹配",
+                f"目标语言占比 {ratio:.0%} < {threshold:.0%}（{len(block)} 行样本，"
+                f"其中 {len(bad)} 行不像目标语言）：{sample}"))
+    return out
 
 
 # ---- --fix 用：机械性修复规则（对原始行文本操作） ----
 
-def apply_fix_rules(line: str, old_text: str | None, add_tflag=False):
+try:
+    from tag_repair import repair_line as _repair_line
+except ImportError:   # 单独拷贝 tl_check 时结构修复不可用，其余规则照常
+    _repair_line = None
+
+
+def apply_fix_rules(line: str, old_text: str | None, add_tflag=False, settle=False):
     """对一行译文应用机械修复，返回 (新行, 修复说明列表)。"""
     fixes = []
     # 规则B: %(中文变量)s → 用 old 里的原名还原
@@ -470,24 +807,44 @@ def apply_fix_rules(line: str, old_text: str | None, add_tflag=False):
             if changed:
                 line = replace_literal_content(line, lit, new_value)
                 fixes.append('补 !t 旗标（插值值通道过 strings 表）')
+    # 规则F: --settle 结构层还原（标签 + 插值）。独立于上面的规范化规则：
+    # 那些只处理"同一个标签写得难看"，这条处理"句子结构被破坏"，依据始终是
+    # 同一 translate 块的原文注释行。详见 checks/tag_repair.py。
+    if settle and _repair_line is not None and find_string_literal is not None:
+        lit = find_string_literal(line)
+        if lit is not None and lit.closed:
+            v, notes = _repair_line(lit.value, old_text)
+            if v != lit.value:
+                line = replace_literal_content(line, lit, v)
+                fixes.extend(notes)
     return line, fixes
 
 
 def check_file(path: Path, issues: list, untranslated: list, do_fix=False,
-               do_tflag=False, kana_check=True, label=None):
+               do_tflag=False, do_settle=False, kana_check=True, label=None,
+               terms=None, lang_rows=None):
     # label：报告里显示的文件标识；递归扫描后子目录可能与顶层同名，
     # 用相对 tl 的路径避免两行 ctx 指向不同文件却无法区分
     label = label or path.name
     in_strings = False
     old, old_line, last_comment, last_comment_line = None, None, None, None
 
-    lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    # 读入用 utf-8-sig：有 BOM 的文件自动剥掉，与后续按行号写回保持一致。
+    # 记录原始 BOM/换行风格，写回时原样还原 —— 否则 --fix 会静默改写整个
+    # 文件的编码标记与行尾（Ren'Py 能读，但属于用户没要求的改动）。
+    raw_bytes = path.read_bytes()
+    had_bom = raw_bytes.startswith(b"\xef\xbb\xbf")
+    raw_text = raw_bytes.decode("utf-8-sig", errors="replace")
+    newline = "\r\n" if "\r\n" in raw_text else "\n"
+
+    lines = raw_text.splitlines()
     edits: dict = {}  # lineno -> new line
 
     def maybe_fix(lineno, raw_line, old_text, kind):
         if not do_fix:
             return
-        fixed, fixes = apply_fix_rules(raw_line, old_text, add_tflag=do_tflag)
+        fixed, fixes = apply_fix_rules(raw_line, old_text, add_tflag=do_tflag,
+                                       settle=do_settle)
         if fixes:
             edits[lineno] = fixed
             issues.append((f"{label}:{lineno}", "修复", "已自动修复(" + kind + ")",
@@ -520,7 +877,8 @@ def check_file(path: Path, issues: list, untranslated: list, do_fix=False,
                         if old == text and (latin_words(old) or (kana_check and has_kana(old))):
                             untranslated.append((f"{label}:{lineno}", old[:60]))
                         else:
-                            compare(old, text, f"{label}:{lineno}", issues, kana_check)
+                            compare(old, text, f"{label}:{lineno}", issues, kana_check,
+                                    terms=terms, lang_rows=lang_rows)
                         maybe_fix(lineno, line, old, "new行")
                     old = None
                 continue
@@ -532,32 +890,89 @@ def check_file(path: Path, issues: list, untranslated: list, do_fix=False,
             if last_comment == new_text and (latin_words(last_comment) or (kana_check and has_kana(last_comment))):
                 untranslated.append((f"{label}:{lineno}", new_text[:60]))
             else:
-                compare(last_comment, new_text, f"{label}:{lineno}", issues, kana_check)
+                compare(last_comment, new_text, f"{label}:{lineno}", issues, kana_check,
+                        terms=terms, lang_rows=lang_rows)
             maybe_fix(lineno, line, last_comment, "对白")
             last_comment = None
         # 译文行没有对应的 # 原文注释（少见），拿不到原文，跳过
 
     if edits:
-        for ln, newline in edits.items():
-            lines[ln - 1] = newline
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        for ln, newline_text in edits.items():
+            lines[ln - 1] = newline_text
+        out = newline.join(lines) + newline
+        if had_bom:
+            out = "\ufeff" + out
+        # newline="" 原样写入，保住上面检测到的换行风格与 BOM；
+        # backup=True 走 fail-closed：备份失败即中止，不覆盖原文件。
+        if _atomic_write_text is not None:
+            _atomic_write_text(str(path), out, encoding="utf-8",
+                               backup=True, newline="")
+        else:
+            path.write_bytes(out.encode("utf-8"))
+
+
+class TlCheckChecker(BaseChecker):
+    """tl 翻译文件质检（门面子命令 tlcheck，参与 `all`）。
+
+    只读说明：唯一的写操作（path.write_bytes）在 --fix 分支内，默认关闭；
+    门面 `all` 从不传 --fix，故参与 all 时是纯只读。与 `git status` 同理——
+    工具具备写能力不违反只读契约，只要默认路径不写。
+    """
+
+    name = "tlcheck"
+    summary = ("tl 翻译文件质检：崩溃级/显示级/提示级三级报告（--fix 才写盘；"
+               "--glossary 术语一致性、--lang-ratio 语言分块判定为可选维度）")
+    takes = PROJECT
+    requires_tl = True
+
+
+CHECKER = TlCheckChecker()
 
 
 def main():
     ap = argparse.ArgumentParser(description="Ren'Py 翻译文件静态质检 v3")
     ap.add_argument("path", help="项目根目录或 game 目录")
     ap.add_argument("--lang", default="schinese")
+    ap.add_argument("-l", "--language", dest="lang2", default=None,
+                    help="兼容 all 透传（--lang 已覆盖；不参与逻辑）")
     ap.add_argument("--fix", action="store_true",
                     help="自动修复机械性问题：%%(name)丢s、%%(变量名被翻译)、花括号内空格/大写的简单标签")
     ap.add_argument("--add-tflag", action="store_true",
                     help="配合 --fix：给译文中与原文一致的裸插值补 !t 旗标（值先过 strings 表，中文名经 [mc.name] 显示时必需）")
     ap.add_argument("--max-examples", type=int, default=15,
                     help="每类问题最多打印的明细条数（默认 15，其余只计总数）")
+    ap.add_argument("--settle", action="store_true",
+                    help="配合 --fix：把译文的标签与插值结构还原到原文注释行"
+                         "（修 {i>／{i]／孤立 {/i}／{我}，以及 [PN]、[中文变量] 等被改名的插值）。"
+                         "只改符号层不动措辞，详见 references/tl_check.md")
+    ap.add_argument("--glossary", default=None, metavar="FILE",
+                    help="术语表路径（.xlsx 三栏 原文|译文|备注 / .jsonl / .json）："
+                         "原文命中词条而译文没出现定稿译名时报 [术语] 术语未落实")
+    ap.add_argument("--lang-ratio", type=float, default=None, metavar="THRESHOLD",
+                    help="启用语言不匹配分块判定：按 20 行分块，目标语言占比低于该阈值"
+                         "（0-1，如 0.75）的块报 [显示] 语言不匹配。默认关闭（启发式，"
+                         "只对 schinese/tchinese/japanese/korean/english 生效）")
     args = ap.parse_args()
 
     if args.add_tflag and not args.fix:
         print("[错误] --add-tflag 需要与 --fix 一起使用", file=sys.stderr)
         sys.exit(2)
+    if args.settle and not args.fix:
+        print("[错误] --settle 需要与 --fix 一起使用", file=sys.stderr)
+        sys.exit(2)
+    if args.lang_ratio is not None and not (0.0 < args.lang_ratio <= 1.0):
+        print("[错误] --lang-ratio 需在 (0, 1] 区间，如 0.75", file=sys.stderr)
+        sys.exit(2)
+
+    terms = load_glossary_terms(args.glossary) if args.glossary else []
+    if args.glossary and not terms:
+        print(f"[警告] 术语表 {args.glossary} 里没有可用词条（需要非空 src+dst）",
+              file=sys.stderr)
+
+    lang_family = target_lang_family(args.lang) if args.lang_ratio is not None else None
+    if args.lang_ratio is not None and lang_family is None:
+        print(f"[警告] --lang-ratio 暂不支持目标语言 '{args.lang}'，本次跳过语言分块判定",
+              file=sys.stderr)
 
     base = Path(args.path)
     tl = find_tl_dir(base, args.lang)
@@ -574,6 +989,7 @@ def main():
 
     issues: list = []          # (ctx, 级别, 类型, 明细)
     untranslated: list = []    # (ctx, 文本)
+    lang_rows: list = [] if lang_family else None   # (ctx, 译文) 供语言分块判定
     # 递归扫描：发行项目的 tl 常按 game/ 目录镜像分子目录（Girls Scripts/ 等），
     # 只扫顶层会漏掉大多数翻译文件
     files = sorted(list(tl.rglob("*.rpy")) + list(tl.rglob("*.rpym")))
@@ -581,8 +997,13 @@ def main():
     kana_check = not args.lang.lower().startswith("ja")
     for f in files:
         check_file(f, issues, untranslated, do_fix=args.fix,
-                   do_tflag=args.add_tflag, kana_check=kana_check,
-                   label=f.relative_to(tl).as_posix())
+                   do_tflag=args.add_tflag, do_settle=args.settle,
+                   kana_check=kana_check,
+                   label=f.relative_to(tl).as_posix(),
+                   terms=terms, lang_rows=lang_rows)
+
+    if lang_rows is not None:
+        issues.extend(lang_ratio_issues(lang_rows, lang_family, args.lang_ratio))
 
     # 项目开启 safe_text 时，未知标签显示为字面文字，不崩溃 → 降级
     if safe_text:
@@ -591,6 +1012,10 @@ def main():
 
     print(f"扫描 {len(files)} 个文件: {tl}"
           + ("（检测到 config.safe_text=True，未知标签降级为显示级）" if safe_text else ""))
+    if terms:
+        print(f"术语表: {args.glossary}（{len(terms)} 条，核对译文是否落实定稿译名）")
+    if lang_family:
+        print(f"语言分块判定: 目标语言族 {lang_family}，块内占比 < {args.lang_ratio:.0%} 报问题")
 
     if untranslated:
         print(f"\n== [提示] 未翻译 new==old ({len(untranslated)} 处) ==")
@@ -600,11 +1025,13 @@ def main():
             print(f"  ... 其余 {len(untranslated) - args.max_examples} 条省略")
 
     if not issues:
-        print("\nOK 未发现崩溃/显示隐患"
+        print("\nOK 未发现崩溃/显示/术语隐患"
               + (f"（另有 {len(untranslated)} 处未翻译）" if untranslated else ""))
+        if args.lang_ratio is not None and lang_family:
+            print(f"     语言分块判定（占比 < {args.lang_ratio:.0%} 报问题）：未发现异常")
         sys.exit(0)
 
-    order = {"崩溃": 0, "显示": 1, "修复": 2}
+    order = {"崩溃": 0, "显示": 1, "修复": 2, "术语": 3}
     by_type: dict = {}
     for ctx, lv, typ, detail in issues:
         by_type.setdefault((lv, typ), []).append((ctx, detail))
@@ -616,8 +1043,21 @@ def main():
             print(f"  ... 其余 {len(items) - args.max_examples} 条省略")
 
     n_crash = sum(1 for _, lv, _, _ in issues if lv == "崩溃")
+    n_term = sum(1 for _, lv, _, _ in issues if lv == "术语")
     print(f"\n共 {len(issues)} 处问题"
-          + (f"（其中崩溃级 {n_crash} 处）" if n_crash else "（无崩溃级）"))
+          + (f"（其中崩溃级 {n_crash} 处）" if n_crash else "（无崩溃级）")
+          + (f"（术语级 {n_term} 处）" if n_term else ""))
+
+    # 与 checks/ 同类的交叉说明：同一次 `all` 里还有别的检查器会碰同一批句子，
+    # 口径不同会让人以为重复报警。说清谁看什么，避免用户二选一选错。
+    print("\n注：本工具按「句」比对 old/new（含崩溃级分级）；同批句子在 `all` 里")
+    print("    还会被 untranslated（只看 new 是否为空/等于 old）与 integrity")
+    print("    （变量/标签结构/转义）各看一遍。三者视角不同、互不取代：")
+    print("      · 要修（--fix）→ 用本工具，只有它带自动修复")
+    print("      · 只要空译文清单 → untranslated 更快（还支持 --csv）")
+    print("      · 要变量/转义层面的结构比对 → integrity")
+    print("    另有两条可选维度默认关闭：--glossary 术语一致性、")
+    print("    --lang-ratio 语言分块判定（都不参与 `all`，需要时显式打开）。")
     sys.exit(1)
 
 

@@ -590,6 +590,12 @@ define gui.interface_text_font = "fonts/NotoSansSC-Regular.otf"
 ```
 文本不显示中文
 │
+├─ ⚠️ 先反问：game/tl/ 真的存在吗？
+│  └─ 不存在、但游戏显示中文 → 不是翻译失效，是第三方 config.replace_text
+│     机翻（根本不走 tl 机制）。判据/载荷识别/拆除见
+│     [replace_text_hook.md](replace_text_hook.md)。下面分支仅适用于
+│     tl 目录确实存在的场景。
+│
 ├─ 检查翻译目录结构
 │  └─ game/tl/schinese/ 存在否？ → 不存在 → 创建
 │

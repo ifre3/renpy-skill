@@ -60,6 +60,7 @@ I18N_GROUP = REG.I18N_GROUP
 STRUCT_GROUP = REG.STRUCT_GROUP
 FIX_GROUP = REG.FIX_GROUP
 SETUP_GROUP = REG.SETUP_GROUP
+POLISH_GROUP = REG.POLISH_GROUP
 
 ALL_GROUP = REG.ALL_GROUP
 
@@ -170,8 +171,12 @@ def main(argv=None):
         print("\n修补/写入类 (默认试运行，--apply/--execute 才落盘):")
         for name in FIX_GROUP + SETUP_GROUP:
             print(f"  {name:14s} {TOOL_DESC[name]}")
+        if POLISH_GROUP:
+            print("\n润色编排 (写 -o 目录，不碰 tl 文件；需显式调用):")
+            for name in POLISH_GROUP:
+                print(f"  {name:14s} {TOOL_DESC[name]}")
         print("\n其他 (只读，需显式调用):")
-        grouped = set(ALL_GROUP) | set(FIX_GROUP) | set(SETUP_GROUP)
+        grouped = set(ALL_GROUP) | set(FIX_GROUP) | set(SETUP_GROUP) | set(POLISH_GROUP)
         for name in TOOL_DESC:
             if name not in grouped:
                 print(f"  {name:14s} {TOOL_DESC[name]}")
@@ -190,7 +195,7 @@ def main(argv=None):
             print("       以下翻译侧检查将跳过：")
             print("         " + " ".join(sorted(NEEDS_TL_DIR & set(ALL_GROUP))))
             print("       这是预期行为（项目还没建翻译目录），不是错误。")
-            print("       想做翻译体检先跑：python sdk/setup_i18n.py --path <项目> --lang %s\n" % lang)
+            print("       想做翻译体检先跑：python setup/setup_i18n.py --path <项目> --lang %s\n" % lang)
         else:
             print(f"tl 目录: {tl_dir}\n")
 

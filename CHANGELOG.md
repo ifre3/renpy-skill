@@ -3,6 +3,187 @@
 本文件是评审与修复流水（按时间倒序）。技能能做什么看 [README.md](README.md)，
 入口与命令看 [renpy/SKILL.md](renpy/SKILL.md)。
 
+### 2026-10-21：全库数字声明扫描（守门网从 3 份文档扩到全库 md）
+
+**背景**：`test_repo_consistency.py` 原本只盯三份主文档（root README / SKILL.md /
+scripts/README）的子命令数与用例总数，网外面的 md 照样会漂。这轮一扫抓到三处，
+且都不是刚写下的：
+
+| 文件 | 写的 | 实际 |
+|------|------|------|
+| `renpy/scripts/checks/README.md` | 不再手写 **34** 项表 | 35（`TOOL_SCRIPTS`） |
+| `renpy/references/namebox_translation.md` | `test_namebox_shared.py` **22** 用例 | 28 |
+| `README.md` | **16** 个分场景参考（且漏列 3 篇） | 18 |
+
+**做法**：新增 `TestNoStaleNumbersInProse`（2 用例），把扫描面扩到全库 md 里所有
+写死的数字声明，五条规则——子命令数、`all` 检查项数、references 数、总用例数、
+单文件用例数。两处判据来自实际误判：「N 用例」按同行有无测试模块名分流归属（回归
+命令里模块名不带 `.py`，第一版正则漏判了 8 行）；子命令数要求上下文出现入口/门面
+字样，免得把「某脚本自身 N 个子命令」误判成顶层门面数。
+
+**不扫**：`CHANGELOG.md`（按日期倒序的流水，历史条目保持当年口径）、`cache/`
+`tmp/` `.zcode/`（本机留档区与过程文件，不是仓库结构）。
+
+**反证用例**：`test_scanner_flags_a_wrong_number` 用合成文本五条规则各写错一处，
+要求逐条报出——只有覆盖率断言时，「正则命中但比较逻辑写错」仍会假通过。
+
+**已知未覆盖（记在案，本轮不建规则）**：`scripts/README.md` 的「零测试面」清单里
+`check_label_issues`（613 行）、`linear_mode.py`（975 行），实测 635 / 1003（含空行）、
+535 / 877（非空行）——**行数口径未定，差约 15%**。要建规则得先在文档里固定口径
+（写明"含空行"或"非空行"），否则规则本身会成为下一个漂移源。
+
+**验证**：`unittest discover` → **597 用例 OK**（595 + 2）；三处漂移已修，用例数在
+三份文档同步 595 → 597。
+
+### 2026-10-18 二十一轮：名字栏中文的假绿灯（裸 define 说话人 + 全串精确匹配）
+
+**背景**：拿 `术语表.xlsx` 核 Dissonance_0.14 的名字栏，`sync_namebox_translation.py`
+报「无需补充翻译，所有术语表中的角色名字均已翻译」，实际 47 个说话人**全部显示英文**。
+两处缺陷叠在一起，方向相反：
+
+1. **识别只认 `Character("Name")`**。该项目零个 `Character()`，人名是带颜色标签的裸
+   define 变量（`define nih = "{color=#0f37f2}Niwa{/color}"`）直接当说话人。工具扫出
+   0 个名字，然后在空集上断言「全部已翻译」——不是漏报，是**假绿灯**。
+   `check_charname_translation.py` 同病，且两者都未察觉。
+2. **匹配语义理解错了**。引擎查找是
+   `renpy/translation/__init__.py:545-564` 的**全串精确匹配**，
+   只剥离 `{#...}` 翻译注释，`{color=}` 一律不剥。所以 `old "Eri"` 命中不了
+   `{color=#d599aa}Eri{/color}`。原先按裸名比对，误判出「16 个已翻译」——同样是假绿灯，
+   只是方向相反。若照它去补条目，`new` 里漏掉标签还会让角色名掉色。
+
+运行时链路已逐环核对：裸字符串说话人会**被包成 `Character`** 再查同一张翻译表
+（`ast.py:583` → `sayexports.py:129-130` → `defaultstore.py:420-422` →
+`character.py:1444,1454,1348-1349` → `substitutions.py:344-345`），
+所以「裸 define 翻不了」是误判，正确做法是补整串条目。
+
+**做法**：新增 `shared/namebox.py` 作为名字栏的唯一实现层（识别 + 引擎等价查找 +
+标签保留拼接 + 条目渲染），两个名字栏工具改为共用它：
+
+- `scan_namebox_names()` 认三类写法：`Character()` / 带标签裸 define / 内联说话人；
+  裸 define 须**真被当说话人用过**才算，并跳过资源路径、含插值的动态名（`[pn]`）、
+  纯符号悬念标记（`???`）。产出保留完整串与台词条数，用于排优先级。
+- `lookup_translation()` 复刻引擎两段查找（全串 → 剥 `{#...}`），**不做**标签剥离。
+- `splice_tags()` 把裸译名塞回标签骨架；多文本段语义歧义时返回 `None` 交人工，不猜。
+- `sync_namebox_translation.py` 新增 `--stub <路径>`：写独立 `translate strings` 文件，
+  避免依赖某个既有文件里已有 strings 块（原先 `--target-file` 的硬前提）。
+- 新增 `references/namebox_translation.md`，SKILL.md 加一行入口与一条「你说→它做」。
+
+**边界**：`append_translations()` 的签名与 `.bak`/原子写入契约未动；两个工具仍默认
+试运行、`--apply` 才写盘；检查器仍无 `--fix`。新增 `tests/test_namebox_shared.py`
+（529 → 560），锁住「裸名条目命中不了带标签串」这条核心回归。
+
+**补记（同一轮，跑 lint 后才发现的第二处）**：`old` 重复对引擎是**致命**的——
+`renpy/translation/__init__.py:534` 直接抛 "A translation for ... already exists"，
+游戏启动即崩。Dissonance_0.14 的 `Cashier` 既是 `define c = "Cashier"`、
+又被内联说过一次，两个工具都只按「缺失/命中」判断，**不会发现自己正产出重复条目**。
+现按 `value` 合并同名来源（保留台词数最大者，其余记入 `notes` 的「同名来源」），
+并在落盘前再拦一道（重复即拒绝写入）。这类问题只有引擎 lint 能暴露，
+已写进 `references/namebox_translation.md` 的「坑 3」。
+
+**落地结果**：`术语表.xlsx` 补入 16 条说话人（Nurse/Me/Maid/Cashier/Employee 等），
+按约定 `NOT ME` / `NOT SAYURI` / `NOT MY CLASS` 保留英文（术语表备注标注「可保留英文」，
+工具据此跳过、不生成 `new == old` 的空转条目）。生成
+`game/tl/schinese/zz_namebox.rpy` 共 40 条，引擎 lint 通过；
+`check_charname_translation --glossary` 现以退出码 0 收口，可当回归闸门用。
+
+### 2026-10-18 二十轮：吸收 AiNiee 的校对/检查维度（术语一致性 + 语言分块判定 + 润色结构守恒门）
+
+**背景**：`cache/AiNiee-Beta` 里躺着一套成熟的翻译质检实现，值得对照吸收。逐文件
+核对后（`Service/TranslationChecker/{TerminologyChecker,RuleChecker,LanguageChecker}.py`、
+`Domain/ResponseChecker/*`、`Service/TaskExecutor/PolisherTask.py`）结论是**大部分维度本
+仓库已有等价物**——未翻译/重复/标签结构/转义走 `tl_check` 与 `integrity`，相似度漏翻、
+外文残留、假名残片走 `polish/screen_quality.py`，占位符保留走 `autotranslate.validate_translation`。
+只补三处真缺口，且按本仓库形态落地（只读检查器 + 纯标准库，不照搬其 GUI 流程内闭环）：
+
+1. **术语一致性**（AiNiee `TerminologyChecker`）：此前术语表只有「造」（`make_glossary`）
+   与「用」（`apply_glossary_body` / `unify_name_translations` / `autotranslate -g`），
+   没有「事后核对 tl 里是否真用上了定稿译名」的检查。落地为 `tl_check --glossary`。
+2. **语言不匹配分块判定**（AiNiee `LanguageChecker`）：`screen_quality` 的外文残留/假名是
+   行级轻量近似，没有整块语言占比判定。落地为 `tl_check --lang-ratio`。
+3. **润色阶段的结构守恒门**（AiNiee `PolisherTask` → `check_polish_response_content`）：
+   值得注意的发现是它的润色检查**比翻译阶段更松**（只留行数/序号/空值/换行/占位符五条，
+   刻意不做「返回原文」「残留原文」「回复格式」检查）。本仓库对应缺口在 `merge_polish.py`：
+   它原本只核锚点存在性，`apply` 也只核锚点，于是「润色把 `{i}` 润丢了」要等回填完跑
+   `tl_check` 才发现，损伤已经写进 tl。
+
+**做法**（均为最小改动，不改既有默认行为）：
+
+- `checks/tl_check.py`：新增 `--glossary`（`.xlsx` 三栏 / `.jsonl` / `.json`，xlsx 用
+  `zipfile`+`ElementTree` **零依赖**读，不引入 openpyxl；ASCII 词条整词边界且大小写不敏感，
+  单字母与 `dst` 空词条丢弃；新增 `[术语]` 级并计入退出码）与 `--lang-ratio`（20 行分块、
+  启发式语言判定、只对 zh/ja/ko/latin 目标生效、样本不足 5 行不判）。两条**都不入 `all`**，
+  默认关闭，既有输出与退出码不变。
+- `polish/merge_polish.py`：合并时逐条拿润色稿与**润色前译文**比对标签 `{}`／插值 `[]`／`%`
+  格式符多重集与换行数，对不上的条目不入批次、列原因、退出码 1。基线取润色前译文而不是英文
+  原文（与 AiNiee `PolisherTask` 的 `translation_text_dict` 同口径）：判据收窄成「这次润色有
+  没有引入新损伤」，历史遗留的结构损伤（该由 `tl_check --fix --settle` 修）不会卡住整批。
+  判据与 `tl_check` 同口径（只拦丢/多结构 token 与换行数增加，润色前译文有换行而润色后合并
+  断行不拦）。顺带修一处隐患：该脚本原先用 `sys.stdout = io.TextIOWrapper(sys.stdout.buffer, ...)`
+  换流，被 import 时旧 wrapper 回收会连带关掉共享 buffer，把同进程后续的 stdout 弄坏（实测让
+  `discover` 全量跑出 100 个 ERROR）。改为 `sys.stdout.reconfigure`，与 `autotranslate.py` 一致。
+- 测试：`test_tl_check_crash.py` 9→27 用例（术语一致性含 xlsx 零依赖读取、整词边界、
+  大小写、fail-closed、CLI 端到端；语言分块含稀释/短块/无语言信息行/语言族映射），
+  `test_polish_batches.py` 21→31 用例（结构守恒门九个正反例 + 历史损伤不卡批 + 缺锚点
+  行为不变）。
+
+**未采纳**：AiNiee 的「检查失败自动重发」闭环——本仓库是 CLI + 缓存 `warn` +
+`--retry-failed`，内联重试会放大 token 成本，也破坏润色管线「只做一轮、账本防重润」的设计；
+`Resource/Regex/check_regex.json` 那套控制代码正则面向 RPG Maker/Mtool，对 Ren'Py 无意义。
+
+**验证**：`unittest discover` → **528 用例 OK**；`--glossary`/`--lang-ratio` 默认关闭，
+`all` 16 项检查的输出与退出码未变。
+
+### 2026-10-14 十九轮：仓库根收口（打包链路恢复 + `cache/` 定性 + 反编译路由补齐）
+
+**背景**：497 用例全绿，但分发链路是断的——`package.py` / `.gitignore` /
+`.gitattributes` 被挪进了 `cache/`，而该脚本用自身所在目录当仓库根，于是从根目录跑
+`python package.py --check` 直接 `缺少必需文件：README.md`。这条防线正是为「工作区躺着
+一个下不来的假包」造的，自己被绕过时没有任何检查会报。连带两处失效：`.gitignore` 困在
+`cache/` 使根目录 `__pycache__` 裸露；README 约定 #4 声称「反编译唯一说明处在 SKILL.md
+注意事项"反编译"行」而那行不存在——AI 拿不到「外部技能优先」，会直接走内置 `unrpyc.py`
+去下载执行第三方代码。
+
+**做法**（最小必要，不动工具链本体）：三个文件归回仓库根（先确认无同名冲突）；
+`cache/LICENSE` 与根 `LICENSE` **署名不同**（contributors vs ifre3），属同名冲突，
+两份原地保留不覆盖。`cache/` 定性为本机留档区（AiNiee 等同类工具参考包 + 单次调研数据，
+按要求保留），写进 `.gitignore` 并在 README 目录表补一行——它不在 `package.py` 白名单
+`INCLUDE_DIRS=("renpy",)` 内，本就不进分发包。SKILL.md 注意事项补「反编译 `.rpyc`」一行：
+首选仓库外的 `renpy-script-decompile`，内置脚本只是兜底并点明其下载执行行为，路由到
+`player_tools.md`；README 约定 #4 的"唯一说明处"随之自洽。
+
+**验证**：`package.py --check` → `[OK] 111 条目 / 75 .py / 9 分组目录`；
+`unittest discover` → **497 用例 OK**。
+
+### 2026-10-08 十八轮：`config.replace_text` 钩子独立成篇（无 `tl/` 机翻的识别与拆除）
+
+**背景**：处理一份第三方汉化发行版（Dissonance 0.14）时发现，该游戏 `game/tl/`
+**根本不存在**却在显示中文。载荷是 `game/audio/dl_failed.mp3`——6 KB 伪音频，
+双层 zlib 解出 18.5 KB Python，由 `game/AtsukoEve.rpy:1411` 的 `init python` 块
+`exec()` 执行，同一 blob 里既装 `config.replace_text`（机翻）又注册
+`welcome_popup` 覆盖屏（站外引流）。`try/except: pass` 吞异常，仅凭 log 判断不出
+它跑过。此前 skill 里 `config.replace_text` 只作为「翻译工作流第 7 节兜底」出现，
+且描述为「只支持纯文本」——这句不准确（钩子作用在 tokenize **之后**的 TEXT token 上，
+标签与插值天然不受影响），也没有反向视角：拆别人发行版时该钩子正是「无 tl 机翻」的判定特征。
+
+**做法**：新增 `references/replace_text_hook.md` 作为该钩子的唯一完整出处——
+引擎源码依据（`renpy/config.py:628`、`renpy/text/text.py:2320-2321` 与
+`2881-2882`、`renpy/text/extras.py:191`）、第三方载荷形态特征表（无 tl / 伪音频 /
+双层 zlib / `exec` / 吞异常 / 与引流同 blob）、4 步识别流程（grep `exec(zlib` 定位
+执行点、验载荷非真音频、双层解压只读输出）、拆除原则（汉化与引流同 blob 时只删
+`overlay_screens` 与网络/AES 部分，重写回 zlib，调用点不动）与桩环境对比验证法
+（`replace_text` 是纯函数，stub `renpy.loader.load` 即可跑，无需启动游戏）、
+以及质量判据（44917 条映射中 41868 整句 / 3049 单词，碎片输出来自单词兜底，
+虚词映射 `'had' -> 不是` 本身有错且会漏进 blur shader 代码——补全整句是唯一出路）。
+
+接入 4 处：SKILL.md 参考索引新增一行、触发关键词表新增「没有 tl 目录却是中文 /
+汉化在哪 / 有个弹窗推网站」、注意事项新增「无 `tl/` 的中文」行（点明
+`check_i18n` / `tl_check` 对该机制无感，避免误以为工具失灵）；
+`translation_workflow.md` 第 7 节补源码依据与交叉引用；`hanization_manual.md`
+第 10 章排查流程图首步插入「先反问 `game/tl/` 是否存在」。
+
+**测试**：本次只加文档、不动 `scripts/`，全量 404 例仍全绿；
+`test_repo_consistency.py` 的 references 索引互校（双向）与 .md 链接解析对新文件通过。
+
 ### 2026-10-07 十七轮：`--step` 名称别名（接十六轮挂账）+ `unify_names.py` 更名 + lint 三件套定位说明
 
 **背景**：十六轮明确记录「`unify_name_translations.py` 859 行用 `-s/--step 1|2|3`
@@ -103,7 +284,7 @@ tree 核实：`ModuleFolders/Domain/{FileReader,FileOutputer,PromptBuilder,...}`
 冲突，用户看到的是恒定假阳性。
 
 **做法**：
-- `scripts/sdk/check_i18n.py`：按 `check_fonts.py:158` 同款 no-op 兼容参数补
+- `scripts/checks/check_i18n.py`：按 `check_fonts.py:158` 同款 no-op 兼容参数补
   `-l/--language/--lang`，注明「本检查按 `tl/` 全语言枚举，不依赖指定语言」。不改检查
   逻辑与报告口径（不选「只查指定语言」方案，避免 all 漏报其他语言）。
 - **中间产物落盘约定统一到 `<项目根>/.cache/`**。原先两条并存规则互相冲突：
@@ -176,10 +357,10 @@ not-loadable 完全一致）。
 真问题（1 崩溃 + 5 标签丢失，全部人工修复后 tl_check 全绿）。
 
 **新增两个只读测试器（进 `all`，12→14 项）**：
-- `sdk/check_fonts.py` 字体接入测试：引用存在性（磁盘 + .rpa + 引擎自带
+- `checks/check_fonts.py` 字体接入测试：引用存在性（磁盘 + .rpa + 引擎自带
   `renpy/common/`）、CJK 翻译语言是否接入 CJK 字体（防切语言后方块）、可选
   fontTools 字形级抽查、`tl/None` 垃圾语言目录点名。
-- `sdk/check_i18n.py` 多语言链路测试：`Language()` 目标存在性、每语言切换入口
+- `checks/check_i18n.py` 多语言链路测试：`Language()` 目标存在性、每语言切换入口
   （无入口且有翻译→指向 fix_lang_button；有 `_preferences.language` 自定义切换则豁免）、
   `config.language` 默认语言合法性、strings 块覆盖。
 - 门面 28→30 子命令；`test_fonts_i18n.py` 18 用例（含伪造 RPA-3.0 索引 fixture）；

@@ -18,7 +18,6 @@ import re
 import sys
 from pathlib import Path
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.path.insert(0, str(Path(__file__).parent))
 from _say_parse import iter_say_entries, strip_tags
 
@@ -38,10 +37,18 @@ RULES = [
     (r"被(?=[\u4e00-\u9fff])", "被动句", 1),
     (r"你(知道|看)，", "you know 直译", 1),
     (r"，不是吗[？?]", "不是吗反问", 2),
+    (r"(?<!，)不是吗[？?]", "不是吗反问", 2),
+    (r"假设[一它这那你我]|假设我|假设你", "假设句式", 1),
+    (r"对此[，。]", "对此直译", 1),
+    (r"总而言之", "总而言之", 1),
     (r"[A-Za-z]{4,}", "英文词≥4", 1),
 ]
 MIN_LEN_ENG_RESIDUE = 4
-RATIO_LOW, RATIO_HIGH, RATIO_WEIGHT = 0.35, 2.8, 2
+# 英→中译文天然比原文短（实测全库中位数 0.42，19.5% 低于 0.35），把 0.35 当
+# 异常会误报掉五分之一的通顺句子——那些被送进 AI 批次后模型判「不用改」，
+# 整批空转。下限收到 0.22 才指向真漏翻/截断；权重也从 2 降到 1，避免把
+# 1 分级的常见表达（…的话 / 被动句 / 英文词）抬过阈值。
+RATIO_LOW, RATIO_HIGH, RATIO_WEIGHT = 0.22, 2.8, 1
 # new==old 视为疑似漏翻的最短长度（过短的多为拟声词，应保留）
 UNTRANS_MIN_LEN = 8
 
@@ -66,10 +73,15 @@ def entry_score(e):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    else:  # pragma: no cover
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="翻译腔可疑行筛选")
     ap.add_argument("source", help="tl 目录或 extract_say 输出的 JSON")
     ap.add_argument("-o", "--out", default="candidates.json")
-    ap.add_argument("--min-score", type=int, default=3)
+    ap.add_argument("--min-score", type=int, default=2,
+                    help="最低可疑分，默认 2（旧版为 3，会漏掉只命中一条低权重规则的行）")
     args = ap.parse_args()
 
     src = Path(args.source)

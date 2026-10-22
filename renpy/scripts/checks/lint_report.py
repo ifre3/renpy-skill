@@ -1,9 +1,26 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """Analyze linter results - show actual issues filtered for real problems.
 
 用法:
   python lint_report.py <翻译文件目录>
   python lint_report.py /path/to/translation/files
+
+## 定位：fmtlint 的「人工深挖视图」，不参与 all
+
+`lint_rpy.py`（门面子命令 `fmtlint`）已经覆盖本脚本的全部规则并进 `all`；
+本脚本保留下来是因为它多给两样 `fmtlint` 不打印的东西：
+
+- **E011 的 old 原文上下文**（`fmtlint` 只报长度比，这里把 `old=` 打出来，
+  便于判断"是真漏翻"还是"原文本来就长"）
+- **每文件 E009/E010/E011 计数表**（跨 20+ 个 tl 文件做分诊时一眼看出哪个文件集中）
+
+**工作流**：先跑 `python renpy-tools-cli.py fmtlint <项目> -l schinese`，
+有问题的文件再用本脚本深挖。**不要**用它替代 fmtlint——它不进 `all`，
+退出码 1 只代表"有深挖项"，语义与 fmtlint 不完全等价（比如 E011 的
+`ratio > 3.5` 这里也计入，而 fmtlint 的展示口径是按类型汇总）。
+
+2026-10-11：修正恒返回 0（原来 `main()` 无返回值，问题再多门面也看不到）。
 """
 import argparse
 import os
@@ -101,6 +118,8 @@ def main():
     print("%-40s %6s %6s %6s" % ("File", "E009", "E010", "E011"))
     print("-" * 60)
 
+    total = e9_total = e10_total = e11_total = 0
+
     for fname in sorted(os.listdir(root)):
         if not fname.endswith(".rpy"):
             continue
@@ -147,7 +166,17 @@ def main():
 
         if e9 or e10 or e11:
             print("%-40s %6d %6d %6d" % (fname[:40], e9, e10, e11))
+            total += e9 + e10 + e11
+            e9_total += e9
+            e10_total += e10
+            e11_total += e11
+
+    print()
+    print("Total: %d（E009 括号可疑 %d，E010 超长行 %d，E011 长度比异常 %d）"
+          % (total, e9_total, e10_total, e11_total))
+    return 1 if total else 0
 
 
 if __name__ == "__main__":
+    sys.exit(main() or 0)
     main()

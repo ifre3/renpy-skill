@@ -19,9 +19,10 @@ _CLI = os.path.join(_TOOLS, "renpy-tools-cli.py")
 ALL_SUBCOMMANDS = [
     "ui", "misuse", "func", "auto", "duplicate", "button", "label", "type",
     "lint", "integrity", "untranslated", "charname", "namebox", "crash",
-    "fontcheck", "langcheck",
+    "fontcheck", "langcheck", "tlcheck", "fmtlint", "polish",
     "linear", "fixtags", "fixcomments", "patchsay", "i18n", "lang", "fonts",
     "langbtn", "perfpanel", "rmsuffix", "urm", "unrpyc", "tablet", "optimize",
+    "typography", "payloadscan",
 ]
 
 
@@ -41,7 +42,7 @@ class TestCliSurface(unittest.TestCase):
         cli = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cli)
         self.assertEqual(sorted(cli.TOOL_SCRIPTS), sorted(ALL_SUBCOMMANDS))
-        self.assertEqual(len(ALL_SUBCOMMANDS), 30)
+        self.assertEqual(len(ALL_SUBCOMMANDS), 35)
 
     def test_list_succeeds(self):
         r = _run(["list"])

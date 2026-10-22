@@ -6,6 +6,7 @@ Ren'Py 字体适配配置工具
 
 import os
 import argparse
+import sys
 from pathlib import Path
 
 CJK_FONTS = {
@@ -263,7 +264,7 @@ def list_fonts():
     print("=" * 60)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(
         description="Ren'Py 字体适配配置工具"
     )
@@ -290,7 +291,23 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    def _require_project(path, command):
+        """项目根必须已存在。
+
+        2026-10-11：此前 `detect --path /nonexistent/xyz` 会 mkdir(parents=True)
+        **凭空建出目录树**再报「目录为空」并退出 0——用户把路径打错时得到的是
+        「一切正常」加一堆垃圾目录。写操作不该由「检测」命令发起。
+        """
+        if not Path(path).is_dir():
+            print(f"[错误] 项目根目录不存在: {path}")
+            print(f"       `{command}` 不会创建目录——请检查路径，"
+                  f"或先用 setup_i18n.py 初始化项目。")
+            return False
+        return True
+
     if args.command == "detect":
+        if not _require_project(args.path, "detect"):
+            return 2
         found = detect_fonts(args.path)
         if found:
             print(f"✅ 发现 {len(found)} 个字体文件:")
@@ -301,10 +318,14 @@ if __name__ == "__main__":
             print("ℹ️  game/fonts/ 目录为空")
 
     elif args.command == "config":
+        if not _require_project(args.path, "config"):
+            return 2
         output = str(Path(args.path) / args.output)
         gen_font_config(args.path, args.cjk, args.en, output)
 
     elif args.command == "fallback":
+        if not _require_project(args.path, "fallback"):
+            return 2
         output = str(Path(args.path) / args.output)
         gen_font_fallback(args.path, output)
 
@@ -313,3 +334,8 @@ if __name__ == "__main__":
 
     else:
         parser.print_help()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)

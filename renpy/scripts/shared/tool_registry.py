@@ -2,7 +2,7 @@
 """门面注册表：检查器元数据从各脚本自己的 CHECKER 读取，不再手写 TOOL_DESC。
 
 为什么（2026-10-06，见 shared/base_checker.py docstring）：
-门面过去有两张手写表——TOOL_SCRIPTS（33 项 子命令→路径）与 TOOL_DESC（33 项
+门面过去有两张手写表——TOOL_SCRIPTS（34 项 子命令→路径）与 TOOL_DESC（34 项
 描述），外加两个硬编码集合 NEEDS_TL_DIR / TL_DIR_TOOLS。它们会漂且漂了不报错：
 `check_i18n.py` 漏声明 `-l`，而 `all` 把 `-l` 原样转发给每个检查器，于是它在任何
 项目上都撞 argparse rc=2、被门面归一成失败项，`all` 恒定返回 1（假阳性）。
@@ -41,8 +41,13 @@ TOOL_SCRIPTS = {
     "untranslated": os.path.join("checks", "check_untranslated.py"),
     "charname": os.path.join("checks", "check_charname_translation.py"),
     "crash": os.path.join("checks", "check_crash_risks.py"),
-    "fontcheck": os.path.join("sdk", "check_fonts.py"),
-    "langcheck": os.path.join("sdk", "check_i18n.py"),
+    "fontcheck": os.path.join("checks", "check_fonts.py"),
+    "langcheck": os.path.join("checks", "check_i18n.py"),
+    "typography": os.path.join("checks", "check_typography.py"),
+    "tlcheck": os.path.join("checks", "tl_check.py"),
+    "fmtlint": os.path.join("checks", "lint_rpy.py"),
+    # 载荷体检：只为没有 tl 目录的第三方机翻而生（requires_tl=False 是刻意的）。
+    "payloadscan": os.path.join("checks", "check_payload.py"),
     # ── 只读但非检查器（调 SDK lint，自己没实现 CHECKER 契约）──
     "lint": os.path.join("checks", "lint_check.py"),
     # ── 写入/修补类（非检查器，无契约）──
@@ -51,7 +56,7 @@ TOOL_SCRIPTS = {
     "fixcomments": os.path.join("translate", "fix_translation_comments.py"),
     "patchsay": os.path.join("translate", "patch_renpy_say.py"),
     "linear": os.path.join("linear", "linear_mode.py"),
-    "i18n": os.path.join("sdk", "setup_i18n.py"),
+    "i18n": os.path.join("setup", "setup_i18n.py"),
     "lang": os.path.join("setup", "switch_default_language.py"),
     "fonts": os.path.join("setup", "add_fonts.py"),
     "langbtn": os.path.join("setup", "fix_lang_button.py"),
@@ -61,6 +66,8 @@ TOOL_SCRIPTS = {
     "unrpyc": os.path.join(".", "unrpyc.py"),
     "tablet": os.path.join("setup", "patch_android_tablet.py"),
     "optimize": os.path.join("sdk", "optimize_assets.py"),
+    # ── 润色编排（写批次 JSON/提示词/账本到 -o 目录，不改 tl 文件本身）──
+    "polish": os.path.join("polish", "plan_batches.py"),
 }
 
 #: 非检查器工具的描述（检查器的描述来自 CHECKER.summary，不在此重复）
@@ -71,7 +78,7 @@ TOOL_DESC = {
     "fixcomments": "翻译注释中的术语反向恢复为英文原文",
     "patchsay": "修补 renpy.say() 硬编码英文（按 translate/renpy_say_replacements.csv）",
     "linear": "线性模式: analyze 分析 / add 生成补丁 / modify 校验事件表",
-    "i18n": "多语言初始化（重构版，位于 sdk/setup_i18n.py）",
+    "i18n": "多语言初始化（重构版，位于 setup/setup_i18n.py）",
     "lang": "切换默认语言（需先跑 i18n）",
     "fonts": "添加字体（需先跑 i18n 生成 fonts_common.rpy）",
     "langbtn": "修复语言按钮写死/缺目标语言项（默认试运行，--apply 写入）",
@@ -81,6 +88,7 @@ TOOL_DESC = {
     "unrpyc": "下载 unrpyc 并反编译 .rpyc",
     "tablet": "安卓平板变体强制补丁（需拷入 SDK 内运行）",
     "optimize": "批量压缩图片/音频（全量降级时退出码 1，见 --help）",
+    "polish": "润色批次规划：场景感知切批 + 提示词 + 账本（写到 -o，不碰 tl）",
 }
 
 #: all 的执行顺序（分组只影响 `list` 的展示与 all 的先后，不影响正确性）
@@ -88,14 +96,31 @@ CHECK_GROUP = ["ui", "misuse", "func", "auto", "charname"]
 CRASH_GROUP = ["crash"]
 # 字体/多语言链路测试：只读、吃 <项目>，无 tl 目录时自动降级为提示
 I18N_GROUP = ["fontcheck", "langcheck"]
+# tl 翻译文件质检（三级报告）。历史上住在 sdk/ 且未注册，导致 all 拿不到它；
+# 2026-10-12 移入 checks/ 并纳入 all。
+# fmtlint 是 tl 文件的「格式层」lint（引号/块ID/行尾/缩进/超长行/长度比），
+# 与 tlcheck 的「语义层」（标签结构/插值/转义/崩溃级）互补；两者都吃 tl 目录。
+# 2026-10-11 归位：此前 lint_rpy + lint_report 共 395 行住在 checks/ 却不入
+# CLI 也不入 all，自动化链路永远跑不到。
+TL_GROUP = ["tlcheck", "fmtlint"]
+
 # 结构性检查：同样只读、同样吃 <项目>，但历史上未纳入 all。
 # 文档（SKILL.md 注意事项 / scripts/README）承诺 all 覆盖「变量完整性 / 标签问题 /
 # 空译文」，故必须在此列出，否则用户按文档跑 all 拿不到报告。
-STRUCT_GROUP = ["integrity", "label", "type", "duplicate", "button"]
+PAYLOAD_GROUP = ["payloadscan"]
+#: 第三方机翻（`config.replace_text` 载荷）体检。只读、不需要 tl——恰恰相反，
+#: 「**没有** tl 目录」是它最常见的场景，requires_tl=False 是刻意的，所以不并入
+#: STRUCT_GROUP（那组多为缺 tl 时空转或报错，语义相反）。
+PAYLOAD_GROUP = ["payloadscan"]
+STRUCT_GROUP = ["integrity", "label", "type", "duplicate", "button", "typography"]
 FIX_GROUP = ["fixtags", "fixcomments", "patchsay", "langbtn"]
+#: 润色编排：只读 tl（回扫场景 label）+ 写 -o 目录的批次/提示词/账本。
+#: 不进 all —— 它需要 --pool/--candidates 等专属参数，all 只透传项目路径。
+POLISH_GROUP = ["polish"]
 SETUP_GROUP = ["i18n", "lang", "fonts", "perfpanel", "rmsuffix", "unrpyc", "tablet", "optimize"]
 
-ALL_GROUP = CHECK_GROUP + CRASH_GROUP + I18N_GROUP + STRUCT_GROUP + ["untranslated"]
+ALL_GROUP = (CHECK_GROUP + CRASH_GROUP + I18N_GROUP + STRUCT_GROUP
+             + TL_GROUP + PAYLOAD_GROUP + ["untranslated"])
 
 DEFAULT_LANG = "schinese"
 
@@ -103,6 +128,7 @@ DEFAULT_LANG = "schinese"
 CHECKER_NAMES = (
     "ui", "misuse", "func", "auto", "duplicate", "button", "label", "type",
     "integrity", "untranslated", "charname", "crash", "fontcheck", "langcheck",
+    "tlcheck", "fmtlint", "typography", "payloadscan",
 )
 
 _CHECKER_CACHE = {}

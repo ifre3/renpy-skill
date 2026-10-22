@@ -2,30 +2,41 @@
 # -*- coding: utf-8 -*-
 """角色名字框（namebox）翻译完整性检查
 
-原理：
-  Ren'Py 显示说话人名字时会经 substitute(..., translate=True) 查字符串翻译，
-  所以 namebox 是否显示中文，取决于 tl/<lang> 里是否存在 ``old "名字"`` 完全匹配的条目。
-  这和名字出现在哪里无关——Character 定义、菜单选项、正文里的同名串共用同一个 key。
+原理
+----
+Ren'Py 把裸字符串说话人现场包成 Character（``renpy/defaultstore.py:420-422``），
+名字最终经 ``substitute(..., translate=True)`` 查字符串翻译
+（``renpy/character.py:1348-1349`` → ``renpy/substitutions.py:344-345``）。
+所以 namebox 是否显示中文，取决于 ``tl/<lang>`` 里是否存在与
+**完整串精确相等**的条目——含 ``{color=}`` 标签时 ``old`` 也必须带标签。
 
-本工具做的事（既有工具都不覆盖的组合）：
-  1. 扫全项目 .rpy（自动跳过 tl/、备份目录、.bak）提取 ``Character("Name")`` 定义，
-     以及 ``"Name" "台词"`` 这种内联说话人写法；
-  2. 统计每个角色变量的实际台词条数，用于排优先级；
-  3. 读 tl/<lang> 的全部 old/new 字符串翻译，判断名字是否有条目、译文是否为空；
-  4. 报告缺失清单，可用 --stub 生成待填的 translate strings 骨架；
-  5. 识别动态说话人表达式（``mc.name "..."`` 带点、``the_group[0] "..."`` 下标，
-     Lab Rats 2 类游戏主角台词全用这种形式）——这类名字经 [x] 插值渲染，
-     不走 Character 定义与 old "名字" strings 通道，单独报告并给处理建议。
+这和名字出现在哪里无关：Character 定义、裸 define 变量、菜单选项、
+正文同名串共用同一个 key。
 
-与既有工具的分工：
-  check_auto_trans.py  —— 交叉引用 menu 选项等字符串（不含只出现在 Character 定义里的名字）
-  sync_namebox_translation.py —— 按术语表批量补条目（需先有 xlsx/json 术语表）
+本工具做的事
+------------
+1. 扫全项目 .rpy，识别三类名字来源（识别逻辑见 ``shared/namebox.py``）::
 
-用法：
-  python check_charname_translation.py <项目目录>               # 项目根或 game 目录均可
-  python check_charname_translation.py <项目目录> -l schinese
-  python check_charname_translation.py <项目目录> --stub out.rpy
-  python check_charname_translation.py <项目目录> --json report.json
+       define e  = Character("Eri", ...)             # kind=character
+       define nih = "{color=#0f37f2}Niwa{/color}"    # kind=define（无 Character 的项目）
+       "Ailing Man" "Uggghhhhhh..."                  # kind=inline
+
+   只认 Character 的话，Dissonance_0.14 这类项目会扫出 0 个名字并误报全绿；
+2. 统计每个说话人的实际台词条数，用于排优先级；
+3. 读 ``tl/<lang>`` 的 old/new，判断条目是否存在、译文是否为空；
+4. ``--stub`` 生成待填的 ``translate strings`` 骨架（新串保留原颜色标签）。
+
+与既有工具的分工
+----------------
+``check_auto_trans.py``      —— 交叉引用 menu 选项等字符串
+``sync_namebox_translation.py`` —— 按术语表批量补条目（需 xlsx/json 术语表）
+
+用法
+----
+    python check_charname_translation.py <项目目录>
+    python check_charname_translation.py <项目目录> -l schinese
+    python check_charname_translation.py <项目目录> --stub game/tl/schinese/zz_namebox.rpy
+    python check_charname_translation.py <项目目录> --json report.json
 
 退出码：0 = 全部有译文；1 = 存在缺失/空译文；2 = 参数或路径错误。
 """
@@ -34,7 +45,6 @@ import argparse
 import io
 import json
 import os
-import re
 import sys
 # 契约层在 shared/（跨组共享，故按相对路径加入 sys.path）
 _SHARED_CONTRACT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -43,6 +53,20 @@ if _SHARED_CONTRACT_DIR not in sys.path:
     sys.path.insert(0, _SHARED_CONTRACT_DIR)
 
 from base_checker import PROJECT, BaseChecker  # noqa: E402
+
+try:
+    from namebox import (
+        NameDef,
+        load_tl_strings,
+        lookup_translation,
+        render_entry,
+        render_strings_block,
+        scan_namebox_names,
+        splice_tags,
+        strip_text_tags,
+    )
+except ImportError:  # 独立运行时退化：只支持 Character 写法
+    NameDef = None
 
 
 class CharnameTranslationChecker(BaseChecker):
@@ -58,159 +82,43 @@ class CharnameTranslationChecker(BaseChecker):
 CHECKER = CharnameTranslationChecker()
 
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "shared"))
-try:
-    from rpy_syntax import encode_rpy_string_content, iter_translation_pairs
-except ImportError:  # 独立运行时退化为内置实现
-    encode_rpy_string_content = None
-    iter_translation_pairs = None
-
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-
-# define c_x = Character("Name"  /  define c_x = Character(_("Name"
-CHAR_DEF = re.compile(
-    r'^\s*define\s+(\w+)\s*=\s*Character\(\s*_?\(\s*"((?:[^"\\]|\\.)*)"'
-)
-CHAR_DEF_PLAIN = re.compile(
-    r'^\s*define\s+(\w+)\s*=\s*Character\(\s*"((?:[^"\\]|\\.)*)"'
-)
-# 内联说话人: "Name" "台词"
-INLINE_SAY = re.compile(r'^\s{2,}"((?:[^"\\]|\\.)*)"\s+"')
-# 角色台词: c_name "..." / c_name '...'
-CHAR_SAY = re.compile(r'^\s{2,}(\w+)\s+[\'"]')
-# 动态说话人: mc.name "..." / the_group[0] "..."（至少含一个 . 或 [ 下标）。
-# 归一取根变量（mc / the_group）做归属；与 CHAR_SAY（纯 \w+）互斥
-DYNAMIC_SAY = re.compile(
-    r'^\s{2,}([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[[^\]"\[]+\])+)\s+[\'"]')
-
-SKIP_DIR_HINTS = ("backup", ".git", "__pycache__", "saves", "cache")
-
-
-def iter_rpy_files(game_dir):
-    """游戏脚本 .rpy（排除 tl/ 翻译目录、备份与缓存目录、.bak 文件）。"""
-    for dirpath, dirnames, filenames in os.walk(game_dir):
-        rel = os.path.relpath(dirpath, game_dir).replace("\\", "/")
-        parts = rel.split("/")
-        if "tl" in parts or any(
-            any(h in p.lower() for h in SKIP_DIR_HINTS) for p in parts
-        ):
-            dirnames[:] = []
-            continue
-        for fn in filenames:
-            if fn.endswith(".rpy") and not fn.endswith(".rpy.bak"):
-                yield os.path.join(dirpath, fn)
-
-
-def collect_characters(game_dir):
-    """返回 names: {显示名: [(文件, 变量或<inline who>), ...]} 与 dynamic:
-    {说话人表达式: {"count": 行数, "files": {文件名}}}"""
-    names = {}
-    dynamic = {}
-    files = sorted(iter_rpy_files(game_dir))
-    for path in files:
-        try:
-            lines = io.open(path, encoding="utf-8").read().splitlines()
-        except (OSError, UnicodeDecodeError):
-            continue
-        for line in lines:
-            m = CHAR_DEF.match(line) or CHAR_DEF_PLAIN.match(line)
-            if m:
-                names.setdefault(m.group(2), []).append((os.path.basename(path), m.group(1)))
-                continue
-            m = INLINE_SAY.match(line)
-            if m and m.group(1) and not m.group(1).startswith("["):
-                names.setdefault(m.group(1), []).append((os.path.basename(path), "<inline who>"))
-                continue
-            m = DYNAMIC_SAY.match(line)
-            if m:
-                info = dynamic.setdefault(m.group(1), {"count": 0, "files": set()})
-                info["count"] += 1
-                info["files"].add(os.path.basename(path))
-    return names, files, dynamic
-
-
-def count_lines(var, game_dir):
-    """统计该角色变量的台词条数（用于排优先级）。"""
-    if var == "<inline who>":
-        return 0
-    pat = re.compile(r'^\s{2,}' + re.escape(var) + r'\s+[\'"]')
-    total = 0
-    for path in iter_rpy_files(game_dir):
-        try:
-            text = io.open(path, encoding="utf-8").read()
-        except (OSError, UnicodeDecodeError):
-            continue
-        total += sum(1 for line in text.splitlines() if pat.match(line))
-    return total
-
-
-def collect_string_translations(tl_dir):
-    """tl 目录下的 old -> new 映射（跳过备份与 bilingual_auto）。"""
-    result = {}
-    for dirpath, dirnames, filenames in os.walk(tl_dir):
-        rel = os.path.relpath(dirpath, tl_dir).replace("\\", "/")
-        if any(h in rel.lower() for h in SKIP_DIR_HINTS) or "bilingual_auto" in rel:
-            dirnames[:] = []
-            continue
-        for fn in filenames:
-            if not (fn.endswith(".rpy") and not fn.endswith(".rpy.bak")):
-                continue
-            path = os.path.join(dirpath, fn)
-            try:
-                lines = io.open(path, encoding="utf-8").read().splitlines()
-            except (OSError, UnicodeDecodeError):
-                continue
-            if iter_translation_pairs is not None:
-                for pair in iter_translation_pairs(lines):
-                    if pair.kind == "on":
-                        result[pair.original] = pair.translated or ""
-            else:  # 退化解析
-                for i, line in enumerate(lines):
-                    om = re.match(r'^\s{4}old\s+"((?:[^"\\]|\\.)*)"\s*$', line)
-                    if om:
-                        nm = re.match(r'^\s{4}new\s+"((?:[^"\\]|\\.)*)"', lines[i + 1] if i + 1 < len(lines) else "")
-                        result[om.group(1)] = nm.group(1) if nm else ""
-    return result
-
-
-def encode(text):
-    if encode_rpy_string_content is not None:
-        return encode_rpy_string_content(text)
-    return text.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def write_stub(path, missing, language):
     """生成待填的 translate strings 骨架（new 留空，AI/人工填）。"""
-    body = [
-        "## 角色名字框翻译补漏（由 check_charname_translation.py --stub 生成）",
-        "## 经字符串翻译生效：Ren'Py 显示名字时按 old 原文全局匹配。",
-        "## 请把每条 old 对应的中文名填到 new 里，然后删掉本注释块。",
-        "",
-        f"translate {language} strings:",
-        "",
-    ]
-    for name in missing:
-        body.append(f'    old "{encode(name)}"')
-        body.append('    new ""')
-        body.append("")
-    io.open(path, "w", encoding="utf-8", newline="\n").write("\n".join(body))
+    header = "\n".join([
+        "角色名字框翻译补漏（由 check_charname_translation.py --stub 生成）",
+        "经字符串翻译生效：Ren'Py 按 old 原文**全串精确匹配**。",
+        "含 {color=} 标签的旧串，new 里必须保留同样的标签，否则角色配色会丢。",
+        "请把每条 old 对应的中文名填到 new 里，然后删掉本注释块。",
+    ])
+    entries = [render_entry(nd.value, "", comment=nd.source) for nd in missing]
+    io.open(path, "w", encoding="utf-8", newline="\n").write(
+        render_strings_block(language, entries, header=header)
+    )
     return path
 
 
 def main():
     ap = argparse.ArgumentParser(
-        description="检查角色名字框翻译完整性（Character 定义名 vs tl 字符串翻译）",
+        description="检查角色名字框翻译完整性（说话人名字 vs tl 字符串翻译）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
   python check_charname_translation.py "MyGame-1.0-pc"
   python check_charname_translation.py "MyGame-1.0-pc" -l schinese
-  python check_charname_translation.py "MyGame-1.0-pc" --stub game/tl/schinese/zz_charnames.rpy
+  python check_charname_translation.py "MyGame-1.0-pc" --stub game/tl/schinese/zz_namebox.rpy
 """,
     )
     ap.add_argument("project", help="项目根目录或 game 目录")
     ap.add_argument("-l", "--language", default="schinese", help="目标语言目录名（默认 schinese）")
+    ap.add_argument(
+        "--glossary",
+        help="术语表路径（.xlsx/.json）。给了才能识别「可保留英文」的名字——"
+             "那类名字原样显示即正确，不算缺失",
+    )
     ap.add_argument("--stub", dest="stub", help="把缺失名单写成 translate strings 骨架到该路径")
     ap.add_argument("--json", dest="json_path", help="把结果导出为 JSON")
     args = ap.parse_args()
@@ -225,49 +133,75 @@ Examples:
         print(f"[ERROR] 未找到翻译目录: {tl_dir}")
         return 2
 
-    names, files, dynamic = collect_characters(game_dir)
-    strings = collect_string_translations(tl_dir)
+    keep_english = set()
+    if args.glossary:
+        sys.path.insert(
+            0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "..", "translate"))
+        try:
+            from sync_namebox_translation import (
+                KEEP_ENGLISH_MARKERS, load_glossary_with_notes)
+            _g, _notes = load_glossary_with_notes(args.glossary)
+            keep_english = {
+                src for src, note in _notes.items()
+                if any(m in note for m in KEEP_ENGLISH_MARKERS)
+            }
+        except ImportError:
+            print("[WARN] 读不到 sync_namebox_translation，跳过「保留英文」判定")
 
-    translated, empty, missing = [], [], []
-    for name in sorted(names, key=lambda s: s.lower()):
-        if name not in strings:
-            missing.append(name)
-        elif not strings[name].strip():
-            empty.append(name)
+    names = scan_namebox_names(game_dir)
+    strings = load_tl_strings(tl_dir)
+
+    if not names:
+        print("[?] 一个说话人定义都没扫到。")
+        print("    纯 .rpyc 发行版（无 .rpy 源码）请先反编译；"
+              "若源码在但仍为 0，可能是识别规则需要更新。")
+        return 0
+
+    translated, empty, missing, kept = [], [], [], []
+    for nd in sorted(names, key=lambda n: (-n.say_lines, n.plain.lower())):
+        hit = lookup_translation(nd.value, strings)
+        if hit is None:
+            if args.glossary and nd.plain in keep_english:
+                kept.append(nd)
+            else:
+                missing.append(nd)
+        elif not hit.strip():
+            empty.append(nd)
         else:
-            translated.append((name, strings[name]))
+            translated.append((nd, hit))
 
-    print(f"扫描 {len(files)} 个脚本，提取 {len(names)} 个名字")
+    print(f"扫描 {len(names)} 个说话人（character {sum(1 for n in names if n.kind=='character')} / "
+          f"define {sum(1 for n in names if n.kind=='define')} / "
+          f"inline {sum(1 for n in names if n.kind=='inline')}）")
     print(f"翻译目录: {tl_dir}")
-    print(f"已有译文 {len(translated)} | 空译文 {len(empty)} | 无条目 {len(missing)}\n")
+    print(f"已有译文 {len(translated)} | 空译文 {len(empty)} | 无条目 {len(missing)}"
+          + (f" | 保留英文 {len(kept)}" if args.glossary else "") + "\n")
 
     if missing:
         print("[!!] 缺少翻译条目（namebox 会显示英文）：")
         rows = []
-        for name in missing:
-            where = names[name]
-            src = ", ".join(sorted({f for f, _ in where}))
-            cnt = sum(count_lines(v, game_dir) for _, v in where) if len(where) <= 3 else 0
-            print(f'   {name!r:40} {cnt:>4} 句   <- {src}')
-            rows.append({"name": name, "lines": cnt, "files": sorted({f for f, _ in where})})
+        for nd in missing:
+            tag = "带标签" if nd.tagged else "裸名  "
+            src = os.path.basename(nd.source.split(":")[0])
+            print(f'   {nd.plain:<22} {nd.say_lines:>5} 句  {tag}  [{nd.kind}] <- {src}')
+            rows.append({
+                "name": nd.plain, "value": nd.value, "lines": nd.say_lines,
+                "kind": nd.kind, "tagged": nd.tagged, "source": nd.source,
+            })
     else:
-        print("[OK] 所有名字都有翻译条目。")
+        print("[OK] 所有说话人名字都有翻译条目。")
         rows = []
 
     if empty:
         print("\n[!!] 有条目但译文为空：")
-        for name in empty:
-            print(f"   {name!r}")
+        for nd in empty:
+            print(f'   {nd.plain!r}  (old "{nd.value}")')
 
-    if dynamic:
-        print("\n[!] 动态说话人表达式（名字经 [x] 插值渲染，不走 old \"名字\" strings 通道）：")
-        for expr, info in sorted(dynamic.items(), key=lambda kv: -kv[1]["count"])[:15]:
-            src = ", ".join(sorted(info["files"])[:3])
-            print(f'   {expr!r:40} {info["count"]:>4} 句   <- {src}')
-        if len(dynamic) > 15:
-            print(f"   ... 其余 {len(dynamic) - 15} 个省略")
-        print("   处理：为取值补 strings 条目（sync_namebox_translation.py），"
-              "并用 tl_check --fix --add-tflag 给含插值的译文补 !t 旗标")
+    if kept:
+        print("\n[-] 术语表标注「保留英文」（原样显示即正确，不算缺失）：")
+        for nd in sorted(kept, key=lambda n: -n.say_lines):
+            print(f"   {nd.plain}（{nd.say_lines} 句）")
 
     if args.stub:
         if not missing:
@@ -279,9 +213,10 @@ Examples:
     if args.json_path:
         io.open(args.json_path, "w", encoding="utf-8").write(json.dumps({
             "total": len(names),
-            "translated": {k: v for k, v in translated},
-            "empty": empty,
+            "translated": {nd.plain: hit for nd, hit in translated},
+            "empty": [nd.value for nd in empty],
             "missing": rows,
+            "kept_english": [nd.plain for nd in kept],
         }, ensure_ascii=False, indent=2))
         print(f"结果已导出: {args.json_path}")
 

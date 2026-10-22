@@ -455,6 +455,9 @@ def main():
             if len(errors) > 20:
                 print(f"    ... 还有 {len(errors) - 20} 条")
             print()
+        # 交叉说明：标签/变量类问题 tlcheck 也会报，口径不同，别让人二选一选错。
+        print("注：标签结构与变量层面的问题，tlcheck 也会各看一遍（它按句比对并分")
+        print("    崩溃/显示/提示三级，且带 --fix）。本工具不写盘，只做结构比对。")
     else:
         print(green("✓ 所有可比较的翻译条目均通过检查。"))
 

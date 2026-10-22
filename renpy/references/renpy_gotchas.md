@@ -18,12 +18,14 @@
 
 ## UI 微调（字号/位置/文本框）
 
-常规 style/screen 语法 AI 直接写即可，这里只收会翻车的点：
+常规 style/screen 语法 AI 直接写即可，这里只收会翻车的点。具体数值与可直接复制的片段见 [typography.md](typography.md)：
 
 - **gui.rpy 是双层结构**：`define gui.text_size = 33` 是变量，style 块通过 `size gui.text_size` 引用它。直接改 style 里的数值，下次 launcher「更改界面/重新生成 GUI」或模板同步时会被变量值覆盖；改变量才是一等入口。重新生成会用新模板**整体重写** gui.rpy/screens.rpy，手工改动全部丢失——改别人的项目别碰这个功能
 - **字号各处独立，不联动**：对话框 `gui.text_size`、名字 `gui.name_text_size`、选项 `gui.choice_button_text_size`、按钮 `gui.button_text_size`、历史 `gui.history_text_size` 各是各的；用户说"字太小"先确认是哪一处
-- **outline 不随字号缩放**：`gui.rpy` 里 `gui.text_size` 提大后，say_dialogue style 的 `outlines [(2, ...)]` 仍是写死像素，描边比例会失衡，需同步改
-- **中文可读字号**：CJK 同号比拉丁字小一圈，英文默认 22 对应中文建议 24+；且 DejaVuSans（gui 默认字体）没有中文字形，只调字号不改字体仍是方块——先解决字形再调字号
+- **outline 不随字号缩放**：`gui.rpy` 里 `gui.text_size` 提大后，say_dialogue style 的 `outlines [(2, ...)]` 仍是写死像素，描边比例会失衡，需同步改（≤20 取 1，28–32 取 2–3，34+ 取 3–4）
+- **中文可读字号**：CJK 同号比拉丁字小一圈，英文默认 22 对应中文建议 24+；对白正文推荐 24–32，名字 20–26，UI 按钮 20–24；且 DejaVuSans（gui 默认字体）没有中文字形，只调字号不改字体仍是方块——先解决字形再调字号
+- **行间距配比**：中文密度高，`line_spacing` 建议取字号的 15%–20%（如字号 28 取 5），太小笔画粘连，太大会挤掉说框最后一行
+- **说框宽度 vs 字号 vs 每行字符数**：中文每行建议不超过 30–38 个字符；字号增大但说框宽度不变，每行可容纳字符数会下降，容易撑破边框或产生奇怪断行——同步加宽说框或减小字号
 - **三套位置属性语义不同**：`xalign/yalign` = pos+anchor 联动（对齐语义）；`offset` 是布局后的平移，不参与 anchor/布局计算，只用来做像素级微调；把 `anchor (0.5, 1.0)` 和 `xalign 0.5` 混用会双重偏移
 - **文本框位置/大小改 gui 变量**：`gui.textbox_height / textbox_width / textbox_xalign / textbox_ypos`；对话框内边距在 `style say_window`（或 say screen 里的 window）的 padding
 - **改别人的发行版不需要解包**：新建 `game/zz_override.rpy`（文件名靠后保证后加载，后定义的 style 属性覆盖先前的），直接写 style override 即可生效，原 .rpyc 不用动：
@@ -110,10 +112,47 @@ init python:
     for _f in ("badcomic.ttf", "DejaVuSans.ttf", "DejaVuSans-Bold.ttf"):
         for _b in (False, True):
             for _i in (False, True):
-                config.font_replacement_map[(_f, _b, _i)] = "fonts/msyh.ttc"
+                config.font_replacement_map[(_f, _b, _i)] = ("fonts/msyh.ttc", _b, _i)
 ```
 
 这能同时覆盖样式、gui 偏好和文本标签里的所有字体引用。注意 `.ttc` 极少数情况下不兼容，备选 `simhei.ttf`。
+
+> ⚠️ **值必须是三元组，不是字符串**（2026-10-11 Dissonance 0.14 主菜单崩溃实录）：
+> 引擎 `renpy/text/font.py` 的 `get_font()` 里写的是
+> `fn, bold, italics = renpy.config.font_replacement_map.get(t, t)` ——
+> 直接对取回的值做三元解包。写成 `...[key] = "fonts/msyh.ttc"` 时，Python 会把
+> 字符串逐字符解包，在**首次渲染文字**那一刻抛
+> `ValueError: too many values to unpack (expected 3)`。
+> 这类错误 `renpy lint` 完全查不出来（渲染期，不是解析期），只能实跑才会暴露。
+> 正确写法是 `("字体", bold, italic)` 三元组，后两项照抄键里的 `_b`、`_i` 即可保留粗斜体语义。
+> 判读线索：traceback 末尾停在 `text.py → glyphs → font.py → get_font`。
+
+### 设默认语言用 `config.default_language`，别用 `config.language`（2026-10-11 Dissonance 0.14 实测）
+想让游戏「首次启动就是中文」，直觉会写 `define config.language = "schinese"`——这会**永久锁死语言**：引擎 `renpy/common/00start.rpy` 的 `_init_language()` 算的是
+
+```python
+lang = os.environ.get("RENPY_LANGUAGE") or config.language or _preferences.language
+```
+
+`config.language` 优先级排在玩家选择**之前**，一旦设了，玩家在偏好里切成 English 也无效，下次启动还是中文。正确写法：
+
+```renpy
+define config.default_language = "schinese"
+```
+
+它只在**首次**启动（无存档偏好）时把 `_preferences.language` 播种成中文，玩家改过就被记住并生效。
+
+> 另一个独立问题：**Ren'Py 不会自动生成语言切换 UI**。`Language()` 这个 action 存在，但按钮必须自己写进偏好屏：
+>
+> ```renpy
+> vbox:
+>     style_prefix "radio"
+>     label _("Language")
+>     textbutton "简体中文" action Language("schinese")
+>     textbutton "English" action Language(None)
+> ```
+>
+> 没写这段，玩家在偏好里根本看不到语言选项——会被误判成「默认语言设错了」，其实两件事。自检：`scripts/checks/check_i18n.py <项目>` 会分别报告「`config.language` 赋值处数」与「`Language()` 入口数」。
 
 ### Ren'Py 8 兼容性：get_size() 返回 float
 Ren'Py 8（Python 3）里 `renpy.render(...).get_size()` 返回**浮点数**，而 `random.randint()` 只收整数 → 游戏从旧版迁移时自定义 Creator Defined Displayable 常崩 `TypeError: 'float' object cannot be interpreted as an integer`。修法：render 里 `cwidth, cheight = int(cwidth), int(cheight)`。同类问题：所有旧游戏代码里把 render 尺寸直接喂给需要 int 的 API 的地方。
@@ -166,7 +205,7 @@ mv game/zz_debug.rpy game/zz_debug.rpyc ../_debug_backup/
 Ren'Py 对每条 Say 文本都执行 `what % tag_quoting_dict`，所以译文里任何裸 `%`（包括机翻把 `100%都` 里的 % 当普通字符）都会在运行时崩 `ValueError: unsupported format character`。三种典型损坏：`%(player_name)啊`（丢类型字符 s）、`%(玩家名字)s`（变量名被翻译）、`100%都`（裸 % 未转义为 %%）。同类问题还有 `[text]→[文本]`（插值变量名被翻译，KeyError）和 `{#month_short}→{#{month short}`（{#…} 标签被机翻改写）。修复前先备份，别信任何自动替换——上一版替换正则漏掉 `%` 反而把 16 行全写坏，靠备份救回来的。全量扫描用：
 
 ```bash
-python <skill>/scripts/sdk/tl_check.py <项目目录> --lang schinese --fix
+python <skill>/scripts/checks/tl_check.py <项目目录> --lang schinese --fix
 ```
 
 `{i}{/i}` 被机翻丢弃不崩，只是丢样式，可留在报告里人工决定。

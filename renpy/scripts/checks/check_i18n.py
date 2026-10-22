@@ -37,8 +37,19 @@ from base_checker import PROJECT, BaseChecker  # noqa: E402
 # Language 动作：Language("xx") / Language('xx') / Language(None)
 LANG_ACTION_RE = re.compile(r'Language\(\s*(?:"(\w+)"|\'(\w+)\'|(None))\s*\)')
 DEFAULT_LANG_RE = re.compile(r'config\.language\s*=\s*(?:"(\w+)"|\'(\w+)\'|None)')
+# config.default_language：只设 _preferences 初值，玩家可改且会被记住。
+# 与 config.language 语义相反——后者优先级高于玩家选择，会把语言锁死。
+SAFE_DEFAULT_RE = re.compile(
+    r'config\.default_language\s*=\s*(?:"(\w+)"|\'(\w+)\'|None)')
 CUSTOM_SWITCH_RE = re.compile(r'_preferences\.language|preferences\.language\s*=')
 STRINGS_BLOCK_RE = re.compile(r'^\s*translate\s+(\w+)\s+strings', re.M)
+# config.replace_text 钩子：无 tl 也能汉化的第三方机制（见
+# references/replace_text_hook.md）。它与 tl/ 并存时会双重写同一句文本，
+# 且钩子无条件生效、不受 Language() 控制 —— 必须报给使用者。
+REPLACE_TEXT_RE = re.compile(r'config\.replace_text\s*(?:=|\.append)')
+# 混淆载荷特征：exec(zlib.decompress( ... )) 双层解压
+OBFUSCATED_EXEC_RE = re.compile(
+    r'exec\s*\(\s*(?:zlib\.decompress|__import__|eval)\s*[\(\.]')
 
 
 def find_game_dir(base: Path):
@@ -52,8 +63,11 @@ def find_game_dir(base: Path):
 
 def scan(game_dir: Path):
     """扫 game/**/*.rpy，返回 (lang_actions, config_langs, has_custom_switch)。"""
-    lang_actions = []   # (lang_or_None, 文件, 行号)
-    config_langs = []   # (lang_or_None, 文件, 行号)
+    lang_actions = []     # (lang_or_None, 文件, 行号, in_tl)
+    config_langs = []     # config.language 赋值（优先级最高，会锁死语言）
+    safe_defaults = []    # config.default_language 赋值（只设初值，玩家可改）
+    hook_hits = []        # config.replace_text 赋值点（非 tl 汉化机制）
+    obf_hits = []         # exec(zlib.decompress(...)) 混淆载荷
     has_custom_switch = False
     strings_langs = set()
     for p in sorted(game_dir.rglob("*.rpy")):
@@ -72,9 +86,16 @@ def scan(game_dir: Path):
                 lang_actions.append((lang, p, lineno, in_tl))
             for m in DEFAULT_LANG_RE.finditer(s):
                 config_langs.append((m.group(1), p, lineno))
+            for m in SAFE_DEFAULT_RE.finditer(s):
+                safe_defaults.append((m.group(1), p, lineno))
             if not in_tl and CUSTOM_SWITCH_RE.search(s):
                 has_custom_switch = True
-    return lang_actions, config_langs, has_custom_switch, strings_langs
+            if REPLACE_TEXT_RE.search(s):
+                hook_hits.append((p, lineno))
+            if OBFUSCATED_EXEC_RE.search(s):
+                obf_hits.append((p, lineno))
+    return (lang_actions, config_langs, has_custom_switch, strings_langs,
+            safe_defaults, hook_hits, obf_hits)
 
 
 def main():
@@ -97,7 +118,8 @@ def main():
 
     tl_root = game_dir / "tl"
     tl_langs = sorted(d.name for d in tl_root.iterdir() if d.is_dir()) if tl_root.is_dir() else []
-    lang_actions, config_langs, has_custom_switch, strings_langs = scan(game_dir)
+    (lang_actions, config_langs, has_custom_switch,
+     strings_langs, safe_defaults, hook_hits, obf_hits) = scan(game_dir)
 
     problems = 0
 
@@ -113,12 +135,13 @@ def main():
     tl_langs = [l for l in tl_langs if l not in junk_langs]
 
     print("  tl 语言: %s" % (", ".join(tl_langs) if tl_langs else "（无翻译目录）"))
-    print("  Language() 动作: %d 处；config.language 赋值: %d 处"
-          % (len(lang_actions), len(config_langs)))
+    print("  Language() 动作: %d 处；config.language 赋值: %d 处；"
+          "config.default_language 赋值: %d 处"
+          % (len(lang_actions), len(config_langs), len(safe_defaults)))
 
     if not tl_root.is_dir() and not lang_actions and not config_langs:
         print("\nℹ️  项目未启用多语言（无 game/tl/ 目录，也无语言切换代码）。")
-        print("   要加翻译先跑: python sdk/setup_i18n.py --path <项目> --lang <语言>")
+        print("   要加翻译先跑: python setup/setup_i18n.py --path <项目> --lang <语言>")
         return 0
 
     # ---- 1. 切换入口目标 ----
@@ -156,8 +179,20 @@ def main():
 
     # ---- 3. 默认语言 ----
     print("\n-- 默认语言")
+    # 项目里存在任何 Language() 切换入口 → 说明作者想让玩家能切，
+    # 此时 config.language 会覆盖玩家选择，是真冲突而非风格问题。
+    switchable = bool(lang_actions) or has_custom_switch
     if not config_langs:
         print("ℹ️  未设置 config.language（Ren'Py 默认基线语言）")
+    for lang, p, ln in safe_defaults:
+        rel = p.relative_to(game_dir)
+        if lang is None or (lang not in tl_langs and lang.lower() in ("english", "en")):
+            print("   ✅ %s:%d config.default_language = %s（基线语言）" % (rel, ln, lang))
+        elif lang in tl_langs:
+            print("   ✅ %s:%d config.default_language = %s（初值，玩家可改）" % (rel, ln, lang))
+        else:
+            print("   ⚠️  %s:%d config.default_language = %s 没有 tl 目录" % (rel, ln, lang))
+            problems += 1
     for lang, p, ln in config_langs:
         rel = p.relative_to(game_dir)
         if lang is None:
@@ -169,8 +204,41 @@ def main():
         else:
             print("   ⚠️  %s:%d 默认语言 %s 没有 tl 目录，启动即回退基线" % (rel, ln, lang))
             problems += 1
+        if lang is not None and switchable:
+            print("        ⚠️ config.language 优先级高于玩家选择：")
+            print("           _init_language() 算 `RENPY_LANGUAGE or config.language")
+            print("           or _preferences.language`，设了它每次启动都强制 %s，" % lang)
+            print("           偏好里的切换点了也会被覆盖回去。")
+            print("           → 只想设初值请用 config.default_language" )
+            problems += 1
 
-    # ---- 4. strings 块（提示级）----
+    # ---- 4. replace_text 钩子（非 tl 汉化机制）----
+    print("\n-- replace_text 钩子（非 tl 汉化）")
+    if not hook_hits:
+        print("✅ 未发现 config.replace_text（汉化只走 tl/）")
+    else:
+        for p, ln in hook_hits:
+            print("   ⚠️  %s:%d 存在 config.replace_text 赋值" % (p.relative_to(game_dir), ln))
+        if tl_langs:
+            print("        ⚠️ 与 tl/ 并存：两条链会同时作用。")
+            print("           钩子在渲染前生效且不受 Language() 控制 —— 切成英文时")
+            print("           tl 译文撤了，钩子仍会把英文改成中文。")
+            print("           → 见 references/replace_text_hook.md 4.1 节「先搬后删」")
+        else:
+            print("        ℹ️ 无 tl/：中文完全依赖此钩子（第三方机翻的典型形态）。")
+            print("           → 见 references/replace_text_hook.md（识别/拆除/质量判据）")
+        problems += len(hook_hits)
+
+    if obf_hits:
+        print("\n-- 混淆载荷")
+        for p, ln in obf_hits:
+            print("   ⚠️  %s:%d 疑似 exec(zlib.decompress(...)) 混淆加载"
+                  % (p.relative_to(game_dir), ln))
+        print("        第三方机翻/引流常这样藏。先解出来读，别整块删")
+        print("        → references/replace_text_hook.md 第 2、4 节")
+        problems += len(obf_hits)
+
+    # ---- 5. strings 块（提示级）----
     print("\n-- 引擎 strings 覆盖（提示级）")
     for lang in tl_langs:
         if lang in strings_langs:

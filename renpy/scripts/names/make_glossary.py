@@ -35,9 +35,17 @@ make_glossary.py — 术语表草稿生成 v3（确定性取证端）
 用法:
   python make_glossary.py <项目根或game或tl目录> [--lang schinese]
                           [-o 输出路径.json] [--max-examples N]
+                          [--xlsx 路径] [--no-xlsx]
+                          [--finalize 定稿.jsonl]
 
-  默认写项目根 .cache/ 目录（glossary_draft_<项目名>.json），不散落项目根；
-  用户用 -o 指定路径时才落指定位置；.cache 不可写时退回系统临时目录。
+默认产出（三件套）:
+  - 草稿 JSON + 证据 JSONL → 项目根 .cache/（-o 指定时落指定路径；
+    .cache 不可写时退回系统临时目录）
+  - AiNiee 三栏术语表 xlsx（原文|译文|备注，按列序读取）→ 默认游戏根目录
+    术语表.xlsx；行 = 草稿确定条目（Character 人名，备注留空）
+  - --no-xlsx 关掉 xlsx（纯 JSON 取证）；--xlsx PATH 指定 xlsx 路径；
+    --finalize FILE 读 AI 定稿（glossary_full.jsonl 或扁平 glossary.json），
+    据其生成完整版 xlsx（备注列取 info，极简仅消歧辅助、不写备选译法，无则留空）
 
   落盘约定（AI 中间产物同此）: 所有中间产物默认进 <项目根>/.cache/——跨会话/
   多天还要复用的（批次 JSON、状态账本、略读笔记）必须落这里，系统临时目录会被
@@ -65,6 +73,17 @@ COMMENT_TEXT_RE = re.compile(r'^\s*#\s*(?:.*?\s)?"((?:[^"\\]|\\.)+)"')
 # Character 定义首参为纯字面量（_() 包装可选，单双引号均可；变量插值/动态构造不匹配）。
 # 注意 Character 与括号之间可能有空格（Character ("Name", ...) 写法），\s* 必须保留
 CHAR_RE = re.compile(r"""Character\s*\(\s*(?:_?\(\s*)?["']([^"'\[\]{}%\\]+)["']""")
+
+# define 角色名：define var = "{color=#xx}Name{/color}"（可带 #姓 注释）。
+# 2026-10-13 Dissonance_0.14 实测：这类项目完全不用 Character()，25 个角色
+# 全写成带颜色标签的 define，导致 Character 扫描为 0、人名候选全丢。
+# 只认整值就是一个 color 标签包裹的纯字面量；拼接/插值/多标签的动态名跳过。
+DEFINE_CHAR_RE = re.compile(
+    r"""^\s*define\s+([A-Za-z_]\w*)\s*=\s*["']"""
+    r"""\{color=\#[0-9a-fA-F]{3,8}\}([^"'\[\]{}%\\]+)\{/color\}["']"""
+)
+# 行尾 #姓 注释（同一行的角色姓），用于 cross-check 全名
+DEFINE_SURNAME_RE = re.compile(r"#\s*([A-Za-z][A-Za-z'\-]*)\s*$")
 
 # 专名形状（候选过滤用，不是资格判断）：每词首字母大写、≤4 词、无句读
 PROPER_NOUN_RE = re.compile(r"^(?:[A-Z0-9][A-Za-z0-9''\-]*)(?:\s+[A-Z0-9][A-Za-z0-9''\-]*){0,3}$")
@@ -131,10 +150,16 @@ def scan_strings(tl_dir: Path):
 
 
 def scan_characters(game_dir: Path):
-    """扫 game/**/*.rpy 的 Character("Name") 定义，返回 {name: "file:line"}。
+    """扫 game/**/*.rpy 的人名定义，返回 {name: "file:line"}。
 
-    只认首参是纯字面量的（变量插值/动态构造跳过——那是运行时才知道的名字）；
-    无 .rpy 源码（纯 .rpyc 发行版）时返回 None 并提示反编译。"""
+    支持两种写法（前者是 Character 标准写法，后者见 Dissonance_0.14 这类
+    把人名写成带颜色标签 define 的项目）::
+
+        Character("Niwa", ...)
+        define nih = "{color=#0f37f2}Niwa{/color}"   #hirai
+
+    只认首参/整值是纯字面量的（变量插值/动态构造跳过——那是运行时才知道的
+    名字）；无 .rpy 源码（纯 .rpyc 发行版）时返回 None 并提示反编译。"""
     files = [p for p in game_dir.rglob("*.rpy") if "tl" not in p.parts]
     if not files:
         return None
@@ -147,6 +172,11 @@ def scan_characters(game_dir: Path):
         for lineno, line in enumerate(lines, 1):
             for m in CHAR_RE.finditer(line):
                 found.setdefault(m.group(1), f"{f.relative_to(game_dir)}:{lineno}")
+            dm = DEFINE_CHAR_RE.match(line)
+            if dm:
+                name = dm.group(2).strip()
+                if name:
+                    found.setdefault(name, f"{f.relative_to(game_dir)}:{lineno}")
     return found
 
 
@@ -190,6 +220,107 @@ def find_collisions(terms: list):
     return coll
 
 
+def resolve_project_root(path: Path) -> Path:
+    """用户传的路径 → 游戏根目录（含 game/ 的那一层）。"""
+    p = path if isinstance(path, Path) else Path(path)
+    if p.name == "game" and p.parent.is_dir():
+        return p.parent
+    if (p / "game").is_dir():
+        return p
+    return p
+
+
+def write_ainiee_xlsx(path: Path, rows: list):
+    """AiNiee 三栏术语表 xlsx（原文|译文|备注）。
+
+    AiNiee 导入规则（TableHelper.load_from_xlsx_file）：跳过表头行、按列序
+    读前 N 列（src/dst/info），第 1 列非空即收——表头文字不参与映射，这里
+    用「原文|译文|备注」对齐 AiNiee 提示词里的术语表格式。备注列极简，
+    仅放消歧辅助（身份/简称/特指提示一句话），不写备选译法（模型约束只要
+    唯一译文），无则留空。openpyxl 缺失时
+    fail-closed：报错退出，不静默跳过。"""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        print("[错误] 生成 xlsx 需要 openpyxl：python -m pip install openpyxl；"
+              "或加 --no-xlsx 只出 JSON 草稿/证据", file=sys.stderr)
+        sys.exit(2)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "术语表"
+    ws.append(["原文", "译文", "备注"])
+    for src, dst, info in rows:
+        ws.append([src, dst, info])
+    for i, w in enumerate((24, 20, 40), start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    try:
+        wb.save(path)
+    except OSError as e:
+        print(f"[错误] 写 xlsx 失败 {path}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def load_finalized(path: str) -> list:
+    """读 AI 定稿术语表 → [(src, dst, info)]。
+
+    支持三种形态：glossary_full.jsonl（每行 {src,dst,info,...}）、扁平
+    glossary.json（{src: dst}）、list（[{src,dst,info}]，兼容 unify 的
+    en/zh 旧键）。src 缺失/为空的行跳过；空文件报错退出。"""
+    rows: list = []
+    p = Path(path)
+    try:
+        text = p.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError as e:
+        print(f"[错误] 读定稿文件失败 {path}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    def _row(o, src_key, dst_key, info_key):
+        if not isinstance(o, dict):
+            return None
+        src = str(o.get(src_key) or "").strip()
+        if not src:
+            return None
+        return (src, str(o.get(dst_key) or "").strip(),
+                str(o.get(info_key) or "").strip())
+
+    if p.suffix.lower() == ".jsonl":
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                o = json.loads(line)
+            except Exception:
+                continue
+            r = _row(o, "src", "dst", "info")
+            if r:
+                rows.append(r)
+    else:
+        try:
+            data = json.loads(text)
+        except Exception as e:
+            print(f"[错误] 定稿文件不是合法 JSON/JSONL: {path} ({e})", file=sys.stderr)
+            sys.exit(2)
+        if isinstance(data, dict):
+            for src, dst in data.items():
+                src = str(src).strip()
+                if src:
+                    rows.append((src, str(dst or "").strip(), ""))
+        elif isinstance(data, list):
+            for o in data:
+                r = (_row(o, "src", "dst", "info")
+                     or _row(o, "en", "zh", "info")
+                     or _row(o, "old", "new", "info"))
+                if r:
+                    rows.append(r)
+    if not rows:
+        print(f"[错误] 定稿文件 {path} 里没有可用条目（需要非空 src）",
+              file=sys.stderr)
+        sys.exit(2)
+    return rows
+
+
 def main():
     ap = argparse.ArgumentParser(description="术语表草稿生成 v3（确定性取证端）")
     ap.add_argument("path", help="项目根目录 / game 目录 / tl 目录")
@@ -199,9 +330,32 @@ def main():
                          "不散落项目根；证据另存为 <output>.evidence.jsonl）")
     ap.add_argument("--max-examples", type=int, default=20,
                     help="每类报告最多打印条数（默认 20）")
+    ap.add_argument("--xlsx", default=None, metavar="PATH",
+                    help="AiNiee 三栏术语表 xlsx 输出路径（默认游戏根目录 术语表.xlsx）")
+    ap.add_argument("--no-xlsx", action="store_true",
+                    help="不生成 xlsx，只出 JSON 草稿/证据（纯取证模式）")
+    ap.add_argument("--finalize", default=None, metavar="FILE",
+                    help="读 AI 定稿（glossary_full.jsonl 或扁平 glossary.json），"
+                         "据其生成完整版 xlsx（备注列取 info，极简，无则留空）")
     args = ap.parse_args()
 
-    tl, game = find_dirs(Path(args.path).resolve(), args.lang)
+    base = Path(args.path).resolve()
+
+    # ── 模式 2：--finalize（AI 定稿 → 完整版 xlsx；无需 tl，只认定稿文件）──
+    if args.finalize:
+        if args.no_xlsx:
+            print("[错误] --finalize 与 --no-xlsx 互斥：finalize 只产出 xlsx",
+                  file=sys.stderr)
+            sys.exit(2)
+        rows = load_finalized(args.finalize)
+        out_xlsx = Path(args.xlsx).resolve() if args.xlsx \
+            else resolve_project_root(base) / "术语表.xlsx"
+        write_ainiee_xlsx(out_xlsx, rows)
+        print(f"[定稿] {args.finalize} → {len(rows)} 条")
+        print(f"xlsx: {out_xlsx}（AiNiee 三栏 原文|译文|备注）")
+        sys.exit(0)
+
+    tl, game = find_dirs(base, args.lang)
     if tl is None:
         print(f"[错误] 在 {args.path} 下找不到 tl/{args.lang}", file=sys.stderr)
         sys.exit(2)
@@ -337,6 +491,16 @@ def main():
               f"可随时删；项目若用 git 建议把 .cache/ 加进 .gitignore）")
     print(f"\n草稿: {out.resolve()}（Character 人名 {len(draft)} 条，直接喂 unify_name_translations.py / apply_glossary_body.py）")
     print(f"证据: {ev.resolve()}（全部候选含 info/count/collisions，AI 略读判定资格后合并进正式术语表）")
+
+    # ── 模式 1 收尾：AiNiee 三栏 xlsx（默认游戏根目录 术语表.xlsx）──
+    if not args.no_xlsx:
+        rows = [(src, dst, "") for src, dst in sorted(draft.items())]
+        out_xlsx = Path(args.xlsx).resolve() if args.xlsx \
+            else resolve_project_root(base) / "术语表.xlsx"
+        write_ainiee_xlsx(out_xlsx, rows)
+        print(f"xlsx: {out_xlsx}（AiNiee 三栏 原文|译文|备注，{len(rows)} 条；"
+              f"AI 精读后跑 --finalize 生成含备注的完整版）")
+
     sys.exit(1 if (drift or untranslated or coll) else 0)
 
 

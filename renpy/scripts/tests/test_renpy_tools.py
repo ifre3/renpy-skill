@@ -624,6 +624,48 @@ class TestNameboxSynchronizer(unittest.TestCase):
             self.assertIn(r'old "A\"Name"', content)
             self.assertIn(r'new "译\"名"', content)
 
+    def test_glossary_notes_carry_keep_english_marker(self):
+        """「可保留英文」在备注列里，是名字栏的语义指令，必须能读出来。"""
+        sync = self._load_sync()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "g.json")
+            with open(path, "w", encoding="utf-8") as stream:
+                json.dump([
+                    {"原文": "NOT ME", "译文": "不是我", "备注": "可保留英文"},
+                    {"原文": "Eri", "译文": "绘里"},
+                ], stream, ensure_ascii=False)
+            mapping, notes = sync.load_glossary_with_notes(path)
+            self.assertEqual(mapping, {"NOT ME": "不是我", "Eri": "绘里"})
+            self.assertEqual(notes, {"NOT ME": "可保留英文"})
+            self.assertIn("保留英文", sync.KEEP_ENGLISH_MARKERS)
+
+    def test_build_target_value_keeps_color_tag(self):
+        """译名必须塞回标签骨架，否则名字栏掉色。"""
+        sync = self._load_sync()
+        self.assertEqual(
+            sync.build_target_value("{color=#0f37f2}Niwa{/color}", "丹羽"),
+            "{color=#0f37f2}丹羽{/color}")
+        self.assertEqual(sync.build_target_value("Iito", "饭户"), "饭户")
+        self.assertIsNone(sync.build_target_value("{b}Fox{/b} the Fox", "狐狸"))
+
+    def test_write_namebox_file_creates_new_file_without_backup(self):
+        """首次生成没有原件可备；ensure_bak 是 fail-closed 的，不能照搬。"""
+        sync = self._load_sync()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "zz_namebox.rpy")
+            count = sync.write_namebox_file(
+                path,
+                [("script.rpy", 3, "{color=#0f37f2}Niwa{/color}",
+                  "{color=#0f37f2}丹羽{/color}")],
+                "schinese",
+            )
+            self.assertEqual(count, 1)
+            with open(path, encoding="utf-8") as stream:
+                content = stream.read()
+            self.assertIn('old "{color=#0f37f2}Niwa{/color}"', content)
+            self.assertIn('new "{color=#0f37f2}丹羽{/color}"', content)
+            self.assertFalse(os.path.isfile(path + ".bak"))
+
 
 class TestSourcePatchSafety(unittest.TestCase):
     @staticmethod

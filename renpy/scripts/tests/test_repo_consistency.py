@@ -1,6 +1,6 @@
 """仓库自洽性契约：文档说的必须等于代码里有的。
 
-背景：这仓库的文档密度很高（SKILL.md 入口 + 两份 README + 15 个 references +
+背景：这仓库的文档密度很高（SKILL.md 入口 + 两份 README + 18 个 references +
 CHANGELOG），而「代码改了、文档没改」是这里唯一会反复发生的缺陷类型。已发生过的
 实例：
 
@@ -61,6 +61,105 @@ def _load_cli():
     cli = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cli)
     return cli
+
+
+# —— 全库数字声明扫描（2026-10-21）——
+#
+# 上面那几个「数字一致」用例只盯三份文档（root README / SKILL.md / scripts/README），
+# 网外面的 md 照样会漂。本组把扫描面扩到全库 md 里所有写死的数字声明，已经抓到：
+#
+# - `renpy/scripts/checks/README.md`「不再手写 34 项表」，实际 35
+# - `renpy/references/namebox_translation.md`「22 用例」，实际 28
+# - `README.md`「16 个分场景参考」，实际 18
+#
+# 不扫的文件及理由：
+# - `CHANGELOG.md`：按日期倒序的流水，历史条目本就该保持写它那天的口径
+# - `cache/`、`tmp/`、`.zcode/`：本机留档区与过程文件，不是仓库结构
+_NOT_SCANNED_DIRS = {"cache", "tmp", ".zcode", "__pycache__"}
+_NOT_SCANNED_FILES = {"CHANGELOG.md"}
+
+# 简单声明：正则第 1 组是文档写的数字，末项是它对应的真值来源 key。
+# 「子命令数」要求上下文里出现入口/门面字样——否则「autotranslate.py 4 子命令」
+# 这种**某个脚本自己的**子命令数会被误当成顶层门面的数。
+_SIMPLE_NUMBER_RULES = (
+    ("子命令数", r"(\d+)\s*项表", "subcommands"),
+    (
+        "子命令数",
+        r"(?:统一 CLI 入口|CLI 门面|门面)[^\n]{0,40}?(\d+)\s*(?:个\s*)?子命令",
+        "subcommands",
+    ),
+    ("all 检查项数", r"(\d+)\s*项全只读", "all_checks"),
+    ("all 检查项数", r"(\d+)\s*项(?:只读)?检查", "all_checks"),
+    ("references 数", r"(\d+)\s*个分场景参考", "references"),
+)
+
+# 「N 用例」要分归属：同一行里出现测试模块名就指那个文件的用例数，否则是全量总数。
+# 两种写法都要认——目录树里是 `test_x.py`，回归命令里是模块名 `test_x`（无 .py）。
+_TEST_FILE_REF = re.compile(r"(test_\w+)(?:\.py)?\b")
+_USE_CASE = re.compile(r"(\d+)\s*用例")
+
+_RULE_NAMES = ("子命令数", "all 检查项数", "references 数", "总用例数", "单文件用例数")
+
+
+def _iter_scanned_md():
+    for root, dirs, files in os.walk(_REPO_ROOT):
+        dirs[:] = sorted(d for d in dirs if d not in _NOT_SCANNED_DIRS)
+        for name in sorted(files):
+            if name.endswith(".md") and name not in _NOT_SCANNED_FILES:
+                yield os.path.join(root, name)
+
+
+def _rel(path):
+    return os.path.relpath(path, _REPO_ROOT).replace(os.sep, "/")
+
+
+def _scan_text(rel, text, truth, per_file):
+    """扫一份文档，返回 (违规列表, 各规则命中次数)。
+
+    拆成纯函数是为了能喂合成文本做反证（见 TestNoStaleNumbersInProse）：
+    只有「覆盖率断言」时，正则命中而比较逻辑写错也能全绿。
+    """
+    violations, coverage = [], {}
+    for lineno, line in enumerate(text.splitlines(), 1):
+        for name, pat, key in _SIMPLE_NUMBER_RULES:
+            for hit in re.findall(pat, line):
+                coverage[name] = coverage.get(name, 0) + 1
+                want = truth[key]
+                if int(hit) != want:
+                    violations.append(f"{rel}:{lineno} [{name}] 写 {hit}，实际 {want}")
+
+        for hit in _USE_CASE.findall(line):
+            ref = _TEST_FILE_REF.search(line)
+            if ref:
+                name, detail = "单文件用例数", f"{ref.group(1)}.py"
+                want = per_file.get(ref.group(1))
+                if want is None:
+                    violations.append(
+                        f"{rel}:{lineno} [{name}] 提到 {detail}，但没这个测试模块"
+                    )
+                    continue
+            else:
+                name, detail, want = "总用例数", "全量", truth["cases_total"]
+            coverage[name] = coverage.get(name, 0) + 1
+            if int(hit) != want:
+                violations.append(
+                    f"{rel}:{lineno} [{name}] {detail} 写 {hit}，实际 {want}"
+                )
+    return violations, coverage
+
+
+def _discover_counts():
+    """只发现、不运行：返回 (用例总数, {测试模块名: 用例数})。"""
+    suite = unittest.defaultTestLoader.discover(start_dir=_HERE, top_level_dir=_HERE)
+    per_file, stack = {}, [suite]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, unittest.TestSuite):
+            stack.extend(list(node))
+        else:
+            mod = type(node).__module__
+            per_file[mod] = per_file.get(mod, 0) + 1
+    return suite.countTestCases(), per_file
 
 
 class TestDocsMatchCode(unittest.TestCase):
@@ -275,6 +374,74 @@ class TestLicenseIsPresent(unittest.TestCase):
         text = _read(os.path.join(_REPO_ROOT, "LICENSE"))
         self.assertIn("MIT License", text)
         self.assertIn("WITHOUT WARRANTY OF ANY KIND", text)
+
+
+class TestNoStaleNumbersInProse(unittest.TestCase):
+    """全库 md 里写死的数字，都必须等于代码里的实际值。
+
+    与上面两组的分工：`TestDocsMatchCode` 查三份主文档的「总用例数 / 子命令数」，
+    这里查**其余所有 md**（含各分组 README、每个 reference、根级评审文档）里的
+    数字声明。一个数字只该有一处真值，但声明点会到处长。
+    """
+
+    def _scan_repo(self):
+        cli = _load_cli()
+        total, per_file = _discover_counts()
+        ref_dir = os.path.join(_SKILL_ROOT, "references")
+        truth = {
+            "subcommands": len(cli.TOOL_SCRIPTS),
+            "all_checks": len(cli.ALL_GROUP),
+            "references": len([f for f in os.listdir(ref_dir) if f.endswith(".md")]),
+            "cases_total": total,
+        }
+        violations, coverage = [], {}
+        for path in _iter_scanned_md():
+            found, hits = _scan_text(_rel(path), _read(path), truth, per_file)
+            violations.extend(found)
+            for name, n in hits.items():
+                coverage[name] = coverage.get(name, 0) + n
+        return violations, coverage
+
+    def test_every_number_in_prose_matches_code(self):
+        violations, coverage = self._scan_repo()
+        self.assertEqual(
+            violations, [],
+            "文档里的数字与代码不符（改完代码请一并改这些声明点）：\n  "
+            + "\n  ".join(violations),
+        )
+        # 覆盖率兜底：正则失效或声明被删时，上面那条断言会以「空 == 空」假通过。
+        for name in _RULE_NAMES:
+            self.assertGreater(
+                coverage.get(name, 0), 0,
+                f"规则「{name}」一处都没扫到——正则失效、或该声明被整体删掉，"
+                f"扫描已在空转（coverage={coverage}）",
+            )
+
+    def test_scanner_flags_a_wrong_number(self):
+        """反证：扫描器必须真的会报错。
+
+        用明显假数字构造（90/80/70/60/7），避免与仓库真实值混淆；
+        文本里每条都写错，要求逐条报出且五条规则全覆盖。
+        """
+        truth = {"subcommands": 90, "all_checks": 80, "references": 70, "cases_total": 60}
+        per_file = {"test_demo": 7}
+        text = "\n".join((
+            "统一 CLI 入口（89 个子命令）",          # 子命令数
+            "一键检测（79 项只读检查）",              # all 检查项数
+            "（69 个分场景参考）",                    # references 数
+            "当前 59 用例",                           # 总用例数
+            "test_demo.py ── 契约（5 用例）",         # 单文件用例数
+        ))
+        violations, coverage = _scan_text("synthetic.md", text, truth, per_file)
+        self.assertEqual(
+            len(violations), 5,
+            f"应报 5 条，实报 {len(violations)} 条：{violations}",
+        )
+        for name in _RULE_NAMES:
+            self.assertGreater(
+                coverage.get(name, 0), 0,
+                f"合成文本没覆盖规则「{name}」，该规则形同未测",
+            )
 
 
 if __name__ == "__main__":

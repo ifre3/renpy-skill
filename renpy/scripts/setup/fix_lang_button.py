@@ -13,7 +13,7 @@ Ren'Py 语言按钮修复脚本
 
 配套脚本边界:
   - 默认语言切换 / 首次启动生效 -> 用 switch_default_language.py
-  - 字体注入与回退链            -> 用 add_fonts.py / sdk/setup_fonts.py
+  - 字体注入与回退链            -> 用 add_fonts.py / setup/setup_fonts.py
   本脚本只负责"语言按钮本身"的检测与修复。
 
 使用方法:
@@ -272,7 +272,7 @@ def main():
     if no_entry:
         print()
         print(f"  未发现语言按钮的文件: {no_entry} 个")
-        print("  提示: 项目可能没有语言切换入口，请先运行 sdk/setup_i18n.py 生成。")
+        print("  提示: 项目可能没有语言切换入口，请先运行 setup/setup_i18n.py 生成。")
 
     print()
     if args.apply:

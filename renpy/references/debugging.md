@@ -1,7 +1,7 @@
 # Ren'Py 排错 & 调试速查
 
 > 通用 Python 异常（IndexError/NameError/TypeError/KeyError 等）直接判读 traceback 即可，不列对照表；
-> Ren'Py 特有报错与版本坑见 [renpy_gotchas.md](renpy_gotchas.md)，汉化崩溃分类见 `scripts/sdk/tl_check.py` 的三级报告。
+> Ren'Py 特有报错与版本坑见 [renpy_gotchas.md](renpy_gotchas.md)，汉化崩溃分类见 `scripts/checks/tl_check.py` 的三级报告。
 > lint 执行走 `scripts/sdk/cli.py <项目> lint`（或 SDK `renpy.exe <项目> lint --quit`，CI 直出退出码）；
 > lint 能查什么属模型常识，此处不重复。
 

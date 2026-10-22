@@ -11,10 +11,11 @@
 | 路径 | 职责 |
 |------|------|
 | `renpy/SKILL.md` | 唯一入口：脚本速览、触发关键词、注意事项（含独有引擎版本边界）、references 分场景索引 |
-| `renpy/scripts/` | 顶层仅统一门面 `renpy-tools-cli.py`（30 子命令 + all/list）与 rpyc 反编译兜底 `unrpyc.py`；9 个分组目录全 ASCII（`sdk` `checks` `translate` `polish` `names` `linear` `setup` `shared` `tests`），404 用例回归测试。详见 `renpy/scripts/README.md` |
-| `renpy/references/` | 15 个分场景参考：SDK 配置速查、工具包边界分级、剧本→脚本工作流、译文润色；gotchas 陷阱库、非显性技巧、画廊/养成/性能预设、字体/rpyc/rpa 速查、汉化工作流、汉化常见问题手册、tl 质检细则、玩家侧工具地图、解锁补丁、排错指南 |
-| `package.py` | 分发打包（纯标准库）：显式白名单 + 产物结构自检 + 可复现 sha256。`python package.py` / `--check` |
+| `renpy/scripts/` | 顶层仅统一门面 `renpy-tools-cli.py`（35 子命令 + all/list）与 rpyc 反编译兜底 `unrpyc.py`；9 个分组目录全 ASCII（`sdk` `checks` `translate` `polish` `names` `linear` `setup` `shared` `tests`），597 用例回归测试。详见 `renpy/scripts/README.md` |
+| `renpy/references/` | 18 个分场景参考：SDK 配置速查、工具包边界分级、剧本→脚本工作流、从零创作主线、译文润色；gotchas 陷阱库、非显性技巧、中文字号与排版、画廊/养成/性能预设、字体/rpyc/rpa 速查、汉化工作流、`config.replace_text` 钩子（无 tl 机翻的识别与拆除）、名字栏翻译（`{color=}` 标签须全串匹配）、汉化常见问题手册、tl 质检细则、玩家侧工具地图、解锁补丁、排错指南 |
+| `package.py` | 分发打包（纯标准库）：显式白名单 + 产物结构自检 + 可复现 sha256。**从仓库根跑** `python package.py` / `--check` |
 | `LICENSE` | MIT。`renpy/scripts/README.md` 声称 MIT，仓库就得真有这个文件（由测试盯） |
+| `cache/` | 本机留档区，**不属于技能、不进 git、不进分发包**（已写进 `.gitignore`）：同类开源工具参考包（AiNiee 等）、单次调研数据。这里的东西别当仓库结构看 |
 
 
 - **加载**：向 Agent 显式指定 SKILL.md 路径（`renpy/SKILL.md`）。
@@ -29,7 +30,12 @@
 4. 一个知识只放一处：`.rpyc` 反编译入口优先用独立的 renpy-script-decompile 技能，内置 `unrpyc.py` 仅作兜底（唯一说明处在 SKILL.md 注意事项"反编译"行）；rpyc/rpa 工具选型与版本坑统一在 `references/player_tools.md`，`advanced_tools.md` 不再重复；tl_check 分级细则唯一出处为 `references/tl_check.md`，SKILL.md 只留路由。
 5. 目录名与文件名一律 ASCII（内容、注释、文档用中文不限）。macOS 的 NFD 归一化会让中文路径上的 `import` 在跨系统 checkout 后失效。
 6. 改完 `scripts/` 必跑：`cd renpy/scripts/tests && python -m unittest discover`。**目录树、用例数、子命令数已由测试强制一致**，不用再靠人眼核对：`test_repo_consistency.py` 查文档内部自洽，`test_count.py` 查文档等于现实；新增/删除测试后这两处会一起失败并打印实际值。
-7. 分发一律走 `python package.py`：显式白名单，产物必须恰好一个 `SKILL.md`、不含 `.git/` / `__pycache__` / `renpy-dev` / `renpy-user`，时间戳固定因而可复现（同样的源码打出同样的 sha256）。提交前可跑 `python package.py --check` 只体检不写文件。
+7. **过程文件不落仓库根**：调试脚本、解出的载荷、一次性验证代码、临时备份一律写入
+   `<游戏根>/.renpy-skill-tmp/`（点号前缀 = Windows 隐藏风格，与 `game/` 同级、紧邻
+   现场但不污染观感）或仓库 `tmp/`（已 gitignore）。仓库根只留分发物。
+   `payloadscan --out` 的落点即按此约定。这条不是洁癖：一次性脚本堆在根会被
+   `package.py` 打进分发包里，也会让读者分不清哪个是真工具。
+8. 分发一律走 `python package.py`：显式白名单，产物必须恰好一个 `SKILL.md`、不含 `.git/` / `__pycache__` / `renpy-dev` / `renpy-user`，时间戳固定因而可复现（同样的源码打出同样的 sha256）。提交前可跑 `python package.py --check` 只体检不写文件。
 
 ## 进展
 

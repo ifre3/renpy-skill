@@ -57,6 +57,13 @@ FONT_REF_RE = re.compile(r'["\']([^"\'\n]+?\.(?:ttf|otf|ttc|woff2?))["\']', re.I
 # 汉化字体补丁"按钮正常对白异常"的根因（AfterDark 0.26 实测）
 RUNTIME_FONT_RE = re.compile(r'\bfont\s+persistent\.')
 
+# font_replacement_map 赋值：值必须是 (字体, bold, italic) 三元组。
+# 引擎 renpy/text/font.py 的 get_font() 做 `fn, bold, italics = ...get(t, t)`，
+# 给了裸字符串就会在首次渲染文字时抛
+# "too many values to unpack (expected 3)"（Dissonance 0.14 主菜单实测），
+# 而 lint 查不出来——渲染期错误。这里抓 `] = "xxx.ttf"` 这种非元组右值。
+FRM_ASSIGN_RE = re.compile(r'font_replacement_map\s*\[[^\]]*\]\s*=\s*([^\n#]+)')
+
 # CJK 语言 → 样张字符（字形级覆盖抽查用）+ 文件名启发式关键词
 CJK_LANGS = {
     "schinese": "简体中文渲染测试，字体缺字会出现方块。",
@@ -90,6 +97,7 @@ def collect_refs(game_dir: Path):
     refs = []
     per_lang = {}
     runtime_font_hits = []   # 屏幕层 `font persistent.*`：运行时压掉 translate 级覆盖
+    bad_frm_hits = []        # font_replacement_map 值不是三元组 → 渲染期必崩
     for p in sorted(game_dir.rglob("*.rpy")):
         try:
             text = p.read_text(encoding="utf-8", errors="ignore")
@@ -111,7 +119,10 @@ def collect_refs(game_dir: Path):
             if lang is None and RUNTIME_FONT_RE.search(s) and "_preferences.language" not in s:
                 # 已做语言感知适配（表达式里含 _preferences.language）的不算
                 runtime_font_hits.append((p, lineno, s.strip()[:100]))
-    return refs, per_lang, runtime_font_hits
+            for m in FRM_ASSIGN_RE.finditer(s):
+                if not _frm_value_ok(m.group(1)):
+                    bad_frm_hits.append((p, lineno, s.strip()[:100]))
+    return refs, per_lang, runtime_font_hits, bad_frm_hits
 
 
 def build_index(game_dir: Path):
@@ -150,6 +161,80 @@ def _found(ref: str, idx: set) -> bool:
     )
 
 
+def _frm_value_ok(rhs: str) -> bool:
+    """font_replacement_map 的右值是否可安全三元解包。
+
+    引擎做 `fn, bold, italics = map.get(t, t)`，所以右值必须是长度 3 的
+    元组/列表字面量。裸字符串会被逐字符解包 → ValueError。变量/函数调用等
+    静态无法判定的形式一律放行（不误报）。
+    """
+    rhs = rhs.strip().rstrip(",").strip()
+    if not rhs.startswith("(") and not rhs.startswith("["):
+        # 非括号开头：字符串常量必错；其余（变量、函数调用）无法判定，放行
+        return not (rhs[:1] in "\"'")
+    # 只有一个元素的 ("x.ttf",) 也算数，但那是长度 1 → 同样会崩
+    close = ")" if rhs.startswith("(") else "]"
+    depth = 0
+    end = len(rhs)
+    for i, ch in enumerate(rhs):
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+            if depth == 0 and ch == close:
+                end = i
+                break
+    body = rhs[1:end]
+    # 顶层逗号切分，统计非空元素个数
+    items = 0
+    buf = ""
+    depth = 0
+    for ch in body:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        if depth == 0 and ch == ",":
+            if buf.strip():
+                items += 1
+            buf = ""
+        else:
+            buf += ch
+    if buf.strip():
+        items += 1
+    return items == 3
+
+
+def _any_font_covers(game_dir: Path, refs, sample: str) -> bool:
+    """项目里任一被引用的字体是否真的覆盖 sample 里的全部字符。
+
+    字体文件名（ptsan.ttf、ubu.ttf …）带不带 CJK 特征与它有没有汉字字形
+    毫无关系；只有查 cmap 才是事实。fontTools 不可用时返回 False（保守）。
+    """
+    try:
+        from fontTools.ttLib import TTFont
+    except ImportError:
+        return False
+    seen = set()
+    for ref, _p, _ln in refs:
+        key = os.path.basename(ref).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cand = game_dir / ref
+        if not cand.is_file():
+            cand = game_dir / key
+        if not cand.is_file():
+            continue
+        try:
+            cmap = TTFont(str(cand), fontNumber=0, lazy=True).getBestCmap() or {}
+        except Exception:
+            continue
+        if cmap and all(ord(ch) in cmap for ch in sample if not ch.isspace()):
+            return True
+    return False
+
+
 def _looks_cjk(font_name: str) -> bool:
     low = font_name.lower()
     return any(k in low for k in CJK_FONT_HINTS)
@@ -185,7 +270,7 @@ def main():
         print("[错误] 未找到 game/ 目录: %s" % args.path, file=sys.stderr)
         return 2
 
-    refs, per_lang, runtime_font_hits = collect_refs(game_dir)
+    refs, per_lang, runtime_font_hits, bad_frm_hits = collect_refs(game_dir)
     idx, rpa_errors = build_index(game_dir)
     for err in rpa_errors:
         print("⚠️  归档索引解析失败（忽略）: %s" % err)
@@ -222,6 +307,19 @@ def main():
     else:
         print("✅ 无屏幕层运行时字体覆盖，translate 级字体补丁可全量生效")
 
+    # ---- 1c. font_replacement_map 取值形状 ----
+    if bad_frm_hits:
+        print("\n❌ 检测到 %d 处 font_replacement_map 值不是三元组：" % len(bad_frm_hits))
+        print("    引擎 renpy/text/font.py 里是 `fn, bold, italics = ...get(t, t)`，")
+        print("    右值必须是 (字体, bold, italic)；写成裸字符串会在首次渲染文字时")
+        print("    抛 ValueError: too many values to unpack (expected 3)，lint 查不出。")
+        print("    修法：config.font_replacement_map[(f, b, i)] = (\"字体.ttf\", b, i)")
+        for p, ln, s in bad_frm_hits[:10]:
+            print("   %s:%d  %s" % (p.relative_to(game_dir), ln, s))
+        problems += len(bad_frm_hits)
+    else:
+        print("✅ 未发现 font_replacement_map 取值形状问题")
+
     # ---- 2. CJK 语言接入 ----
     print("\n" + "=" * 60)
     print("🌐 翻译语言字体接入")
@@ -252,6 +350,11 @@ def main():
             # 项目级：任何被引用的字体名带 CJK 特征（font_replacement_map /
             # 语言切换脚本都在 .rpy 引用里，已被上面的引用收集覆盖）
             wired = any(_looks_cjk(r) for r, _, _ in refs)
+        if not wired:
+            # 名字启发式查不出（项目自带字体可能叫 ptsan.ttf / ubu.ttf 这类
+            # 毫无 CJK 特征的名字，但字形表里确实有汉字）。装了 fontTools 就
+            # 直接查字形表——名字不可信，字形才是事实。
+            wired = _any_font_covers(game_dir, refs, sample)
         if wired:
             print("   ✅ %-12s 已接入 CJK 字体" % lang)
         else:

@@ -89,4 +89,4 @@ python scripts/sdk/check_assets.py --path <项目>   # 引用了不存在的资�
 
 - `python scripts/sdk/cli.py <项目> distribute` 出 Windows zip；需要 mac/linux/web/android 时按 sdk_config.md 对应命令
 - 交付前 checklist：lint 零错误 / analyze 零悬空 / check_assets 零缺失 / 中文字体已注入 / 默认语言正确
-- 想出多语言版 → `scripts/sdk/setup_i18n.py` 生成 tl 骨架，翻译按 [translation_workflow.md](translation_workflow.md)（含开工确认门与术语表用户门）
+- 想出多语言版 → `scripts/setup/setup_i18n.py` 生成 tl 骨架，翻译按 [translation_workflow.md](translation_workflow.md)（含开工确认门与术语表用户门）

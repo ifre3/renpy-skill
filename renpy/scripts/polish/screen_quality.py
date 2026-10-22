@@ -13,7 +13,7 @@ src/shared/text/translation-quality-rules.ts 等文件，2026-10 摘录）：
 - 相似度用包含快判 + 字符集 Jaccard > 0.8（其 is_translation_text_similar
   同口径），抓「原文照抄加点料」的局部漏翻——与 screen_suspicious 的
   new==old 检测互补。
-- 假名残片口径与 ``../sdk/tl_check.py`` 一致（[ぁ-ヿ]+，汉字不算）。
+- 假名残片口径与 ``../checks/tl_check.py`` 一致（[ぁ-ヿ]+，汉字不算）。
 
 用法（输入输出与 screen_suspicious.py 同约定）::
 
@@ -31,7 +31,6 @@ import re
 import sys
 from pathlib import Path
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.path.insert(0, str(Path(__file__).parent))
 from _say_parse import iter_say_entries  # noqa: E402
 
@@ -165,6 +164,10 @@ def _load(source):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    else:  # pragma: no cover
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="硬性质校筛行（外文残留/假名/半角标点/相似度漏翻）")
     ap.add_argument("source", help="tl 目录或 extract_say 输出的 JSON")
     ap.add_argument("-o", "--out", default="quality_candidates.json")

@@ -53,7 +53,8 @@ if hasattr(sys.stderr, "reconfigure"):
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _TOOLS = os.path.dirname(_HERE)
 _BACKUP_DIR = os.path.join(_TOOLS, "shared")
-for p in (_HERE, _TOOLS, _BACKUP_DIR):
+_CHECKS_DIR = os.path.join(_TOOLS, "checks")
+for p in (_HERE, _TOOLS, _BACKUP_DIR, _CHECKS_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 

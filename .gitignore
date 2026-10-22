@@ -1,5 +1,6 @@
 __pycache__/
 .zwork/
+.zcode/
 *.pyc
 *.pyo
 *.egg-info/
@@ -7,3 +8,12 @@ __pycache__/
 *.exe
 *.bak
 .fix_name_backup/
+
+# 本机留档区：同类工具参考包、单次调研数据。不进 git，也不进分发包。
+cache/
+
+# 过程文件区：一次性调试脚本、解出的载荷、验证代码、备份。不进 git（见 README 贡献规范第 6 条）。
+tmp/
+
+# 游戏侧过程产物：payloadscan --out 的落点，点号前缀隐藏、与 game/ 同级。
+.renpy-skill-tmp/

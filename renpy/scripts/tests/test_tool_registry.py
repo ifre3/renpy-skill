@@ -60,12 +60,23 @@ class TestRegistrySelfConsistency(unittest.TestCase):
         self.assertEqual(dupes, set(), f"脚本重名会让 import 缓存串味：{sorted(dupes)}")
 
     def test_groups_partition_the_all_group(self):
-        groups = (REG.CHECK_GROUP + REG.CRASH_GROUP + REG.I18N_GROUP
-                  + REG.STRUCT_GROUP + ["untranslated"])
+        # 动态取所有 *_GROUP，别硬编码清单：加一个新分组（如 PAYLOAD_GROUP）时
+        # 若忘了同步这里，测试会假装通过或误报——2026-10-21 加 payloadscan 时
+        # 就踩了这条。另外 `all` 里的散项（untranslated）不在任何分组，
+        # 比较时用 ALL_GROUP 自身的差集来补，避免再次写死。
+        group_names = [n for n in dir(REG) if n.endswith("_GROUP")
+                       and n != "ALL_GROUP"]
+        groups = []
+        for name in group_names:
+            groups.extend(getattr(REG, name))
         self.assertEqual(len(groups), len(set(groups)),
-                         f"all 分组有重复项：{groups}")
-        self.assertEqual(set(groups), set(REG.ALL_GROUP),
-                         "all 分组之并必须等于 ALL_GROUP")
+                         f"各分组内部有重复项：{groups}")
+        orphan = set(REG.ALL_GROUP) - set(groups)
+        self.assertEqual(orphan, {"untranslated"},
+                         f"ALL_GROUP 里有不属于任何分组的成员（新增分组或散项"
+                         f"请一并对齐）：{sorted(orphan)}")
+        # 反向不成立、也不该成立：FIX_GROUP / SETUP_GROUP / POLISH_GROUP 是
+        # 写入类与编排类，本就不进 all（有了它们才会有 excessive 的成员）。
 
     def test_every_group_member_is_a_registered_tool(self):
         for grp in ("CHECK_GROUP", "CRASH_GROUP", "I18N_GROUP", "STRUCT_GROUP",
@@ -77,14 +88,21 @@ class TestRegistrySelfConsistency(unittest.TestCase):
         """分组只有三类：有分组的 + 其余（list 输出第三段「其他」兜住）。
 
         加新分组时这条会提醒同步 list 的展示逻辑——否则工具会从 list 里消失。
+        2026-10-21：PAYLOAD_GROUP 加入后这里必须跟着扩，否则 payloadscan 会被
+        当成「其他」段的成员而误报。故改为动态收集所有 *_GROUP。
         """
-        grouped = (set(REG.ALL_GROUP) | set(REG.FIX_GROUP)
-                   | set(REG.SETUP_GROUP))
+        group_names = [n for n in dir(REG) if n.endswith("_GROUP")
+                       and n != "ALL_GROUP"]
+        grouped = set(REG.ALL_GROUP) | {n for n in set(REG.TOOL_SCRIPTS)
+                                        if n in {m for g in group_names
+                                                 for m in getattr(REG, g)}}
         ungrouped = [n for n in REG.TOOL_SCRIPTS if n not in grouped]
         self.assertEqual(
             sorted(ungrouped), sorted(["lint", "namebox", "linear", "urm"]),
             "「其他」段的成员变了：这些是既不属于 all 也不属于写入类的工具"
-            "（lint 调 SDK、namebox/urm 需显式指定、linear 是独立模式）",
+            "（lint 调 SDK、namebox/urm 需显式指定、linear 是独立模式）。"
+            "polish 于 2026-10-11 归入 POLISH_GROUP（润色编排，需 --pool 等"
+            "专属参数，不能进 all）",
         )
 
 
@@ -103,11 +121,13 @@ class TestCheckerRegistryMetadata(unittest.TestCase):
                 self.assertTrue(REG.requires_tl(name))
 
     def test_only_untranslated_takes_tl_dir(self):
-        """现状快照：all 里唯一吃 tl_dir 的是 untranslated（位置参数就是 tl 目录）。
+        """现状快照：all 里吃 tl_dir 的（位置参数就是 tl 目录）。
 
+        2026-10-11 加入 fmtlint（tl 格式层 lint，同样直接吃 tl 目录）。
         将来新增吃 tl_dir 的检查器时这条会提醒同步 TL_DIR 相关测试。
         """
-        self.assertEqual(REG.all_takes_tl_dir(), ["untranslated"])
+        self.assertEqual(sorted(REG.all_takes_tl_dir()),
+                         ["fmtlint", "untranslated"])
 
     def test_requires_tl_matches_measured_behaviour(self):
         """requires_tl=True 的检查器，缺 tl 目录时输出必须与「有 tl 目录」不同。
@@ -120,9 +140,11 @@ class TestCheckerRegistryMetadata(unittest.TestCase):
         need = [n for n in REG.ALL_GROUP if REG.requires_tl(n)]
         self.assertEqual(
             sorted(need),
-            sorted(["charname", "integrity", "duplicate", "untranslated"]),
+            sorted(["charname", "integrity", "duplicate", "untranslated",
+                    "tlcheck", "fmtlint"]),
             "requires_tl 集合变了。button 已从名单移出（实测不依赖 tl 目录，"
-            "见 test_button_checker_does_not_require_tl）；同步本条与 "
+            "见 test_button_checker_does_not_require_tl）；fmtlint 于 2026-10-11 "
+            "加入（实测无 tl 目录时输出与有 tl 时不同）。同步本条与 "
             "test_only_untranslated_takes_tl_dir",
         )
 
@@ -354,11 +376,13 @@ class TestChecksDirectoryIsCanonical(unittest.TestCase):
         )
 
     def test_every_registered_checker_lives_in_expected_dir(self):
+        # 2026-10-12：只读检查器一律归 checks/。fontcheck/langcheck 原本住 sdk/
+        # （sdk/ 因此成了"工程工具 + 检查器"的杂物抽屉，tl_check 还因未注册进不
+        # 了 all），现已与 tlcheck/tag_repair 一同归位。sdk/ 只留工程工具。
         expected = {
             "checks": {"ui", "misuse", "func", "auto", "duplicate", "button",
                        "label", "type", "integrity", "untranslated", "charname",
-                       "crash"},
-            "sdk": {"fontcheck", "langcheck"},
+                       "crash", "fontcheck", "langcheck", "tlcheck"},
         }
         for name in REG.CHECKER_NAMES:
             rel = REG.TOOL_SCRIPTS[name].replace("\\", "/")
@@ -377,8 +401,7 @@ class TestChecksDirectoryIsCanonical(unittest.TestCase):
 
 
 def expected_by_name(name):
-    if name in ("fontcheck", "langcheck"):
-        return "sdk"
+    # 只读检查器一律归 checks/（2026-10-12 归位，见上一条的注释）
     return "checks"
 
 

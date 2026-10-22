@@ -19,7 +19,7 @@
 | 意译与润色 | 结构差异大的重大意译及理由 |
 | 审查修正 | 修正前后对比 + 原因 |
 
-> 机器可读的 `glossary.json`（供 `names/unify_name_translations.py` 与 `names/apply_glossary_body.py` 消费）不必手工从零写：先跑 `python scripts/names/make_glossary.py <项目> --lang schinese` 生成草稿（自动提取 Character 定义人名 + strings 块配对 + 碰撞/漂移报告），再按下节精读定稿。**草稿与证据默认写项目根 `.cache/` 目录，不散落项目根**（AI 自己的中间产物同此，判据见 2.5 第 1 步）；定稿产物属交付物，也只在用户要求落盘时才进项目。
+> 机器可读的 `glossary.json`（供 `names/unify_name_translations.py` 与 `names/apply_glossary_body.py` 消费）不必手工从零写：先跑 `python scripts/names/make_glossary.py <项目> --lang schinese` 生成草稿（自动提取 Character 定义人名 + strings 块配对 + 碰撞/漂移报告），再按下节精读定稿。**草稿与证据默认写项目根 `.cache/` 目录，不散落项目根**（AI 自己的中间产物同此，判据见 2.5 第 1 步）。**默认交付物例外（用户约定）**：AiNiee 三栏 xlsx（`原文|译文|备注`）默认落**游戏根目录** `术语表.xlsx`——表头一行、跳过表头按列序读、第 1 列非空即收，可直接导入 AiNiee；备注极简仅翻译辅助（消歧/身份/简称提示），**不写备选译法**（模型约束只要唯一译文），无则留空。
 
 ## 2.5 术语表精读（脚本取证 → AI 判资格）
 
@@ -27,7 +27,8 @@
 
 1. 读 `.cache/glossary_draft_<项目名>.json.evidence.jsonl`（全部候选含 count/collisions/where；脚本默认写项目根 `.cache/`，路径见运行输出），对 `kind=term` 的候选逐条判定。**你自己的中间产物也进 `<项目根>/.cache/`**——批次 JSON、状态账本、略读笔记这类跨会话/多天还要复用的必须落这里：系统临时目录会被清空，账本一丢就重复润色/重复处理。只有本次会话读完就扔的采样片段才进临时目录（`.cache/` 会随任务积累，交付前清一遍即可）。一次性辅助代码优先复用 scripts/ 现成脚本或单行命令，不为小事新造脚本。
 2. 分批略读 tl 对白原文（~200 行/批、从多个不连续区域采样），像读轻小说一样读：
-   - **资格判据**（学 LinguaGacha glossary/rule.md）：**只收专有名词**——人名/别名/称号/组织/作品特有概念/作品标题；**地名、系统词（好感度/属性/任务）、引擎 UI 词、普通职业、称谓、描述性表达一律不收**，按语境翻即可。频率只是证据，不构成资格——低频但身份重要的照收。
+   - **资格判据**（学 LinguaGacha glossary/rule.md）：**只收专有名词 + 特指称谓**——人名/别名/称号/组织/作品特有概念/作品标题/指代唯一对象的称谓（`Suzu's Mama`、`Mr. Hirai` 这类）；**地名、系统词（好感度/属性/任务）、引擎 UI 词、普通职业、泛指称谓（Nurse、Maid、Cashier 这类）、描述性表达一律不收**，按语境翻即可。频率只是证据，不构成资格——低频但身份重要的照收。
+   - **Character 提取的同判**：make_glossary 从 Character 定义直接进草稿的条目**不豁免**——职业/称谓/描述性标签（`Bartender`、`Waiter`、`Bird`、`A Student`、`Everyone`、`Ginger Cat`、`Crowd` 这类无专名价值的）即便进了草稿也必须在定稿时剔除，术语表只留专有词汇。
    - **旧词新用必抓**：普通词在这部作品里是专有概念（"星核"式）的，通用翻译模型必翻错，发现即收。这只有读了原文才看得出。
    - **复核人名译名**：Character 定义清单 vs 译文（`Saki→"Sunday"` 式张冠李戴只有读了才看得出）。
 3. **定稿前征求用户意见（必做，不得静默定稿）**：AI 略读到能概括剧情时停下，先给用户一句话简介「此游戏讲……（简略）」，再问术语表怎么选，三选一：
@@ -35,9 +36,9 @@
    - **不翻译**：专有名词保留原文，跳过术语表收录与后续统一（`glossary.json` 不产出或为空，直接进正文翻译）
    - **AI 自行选择**：按下方资格判据由 AI 定稿（继续 4–6 步）
    - 用户回答前不要产出 `glossary.json`，也不要开始大规模正文翻译
-4. 收录条目 `info` **极简**：一句话，只写身份/关系 + 必要消歧（如 `A（lo 的姐姐）`、`Parker（与 Park 消歧）`）；不写行号、出现次数、定义文件等取证细节。有 `collisions` 的条目写清"何时用本条译名、其它用法怎么翻"。
+4. 收录条目 `info` **极简**：一句话，只写身份/关系 + 必要消歧（如 `A（lo 的姐姐）`、`Parker（与 Park 消歧）`）；不写行号、出现次数、定义文件等取证细节。有 `collisions` 的条目写清"何时用本条译名、其它用法怎么翻"。**没有必要信息的条目 `info` 留空**——不填"角色名""某词的翻译"这类凑数描述。**不写备选译法**（"亦可作X"）——术语表是喂翻译模型的约束（glossary injection / 一致性检查），只给唯一确定译文；备选写法只进人工审校笔记（如 `.cache/` 的略读笔记），不进术语表与 xlsx。
 5. `src` 取最短自然稳定边界；仅当大小写存在真实碰撞才标 `case_sensitive`。
-6. 定稿合并：确定条目进 `glossary.json`（扁平 `{src: dst}`，喂 unify 统一）；带 info 的完整版存 `glossary_full.jsonl`（`{src, dst, info, case_sensitive}`，AI 翻译/polish时作为提示词注入）。
+6. 定稿合并：确定条目进 `glossary.json`（扁平 `{src: dst}`，喂 unify 统一）；带 info 的完整版存 `glossary_full.jsonl`（`{src, dst, info, case_sensitive}`，AI 翻译/polish时作为提示词注入）。随后跑 `python scripts/names/make_glossary.py <项目> --finalize glossary_full.jsonl` 生成**完整版 xlsx**（备注列取 info，极简仅翻译辅助，无则留空；`--xlsx PATH` 可改输出路径）。
 
 ## 3. 翻译规则
 
@@ -98,7 +99,7 @@ game/tl/schinese/fonts/MiSans-Regular.ttf
 
 - **图片烤字 / 图片 UI**：PS（或 AI 去字）抹掉原文后导出同名 png 放入对应路径，比 OCR 回贴图轻得多，优先用这条
 - **视频内嵌字幕**：重压导出后转 webm（Ren'Py 只认 webm）；格式不对会静默不播
-- **合成字体（保持原游戏字体风格）**：FontCreator 打开原英文字体 + 中文字体，把 CJK 字形按相同码点选择性粘贴进原字体，字形转换器调粗细，导出后**原名**放 `tl/schinese/fonts/`。常规字体注入用 `scripts/sdk/setup_fonts.py` 即可，不必合成
+- **合成字体（保持原游戏字体风格）**：FontCreator 打开原英文字体 + 中文字体，把 CJK 字形按相同码点选择性粘贴进原字体，字形转换器调粗细，导出后**原名**放 `tl/schinese/fonts/`。常规字体注入用 `scripts/setup/setup_fonts.py` 即可，不必合成
 - 语言切换按钮 / 默认语言：`scripts/setup/fix_lang_button.py` + `switch_default_language.py`（三件套排查顺序见 SKILL.md 注意事项）
 
 ## 7. 查缺补漏兜底：`config.replace_text`
@@ -116,6 +117,7 @@ init python:
 
 - 只支持纯文本（不含 `{}`/`[]` 语法处理），多条规则时**长的放前面**（短串会先吃掉长串的子串）
 - 兜底顺序：oldnew strings（新建 rpy，首行 `translate schinese strings:`）→ 额外文本提取（`check_untranslated.py` / 工具箱）→ `config.replace_text`
+- 引擎源码依据（`text.py:2320` / `2881`、`extras.py:191`）、以及**第三方发行版用本钩子做机翻**（无 `tl/`、载荷伪装成音频）的识别与拆除 → [replace_text_hook.md](replace_text_hook.md)
 
 ## 典型示例
 

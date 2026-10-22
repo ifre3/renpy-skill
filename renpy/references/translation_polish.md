@@ -7,6 +7,7 @@
 
 | 策略 | 机制 | Token 成本 | 适用 |
 |------|------|-----------|------|
+| **策略零**：无 API 基于规则直接润色 | `direct_polish.py` 机械改写（半角/重复标点、连续的的、被动“将会”、如果…的话等），不调大模型 | 0 | 还没 API 密钥；或想先零成本清洗明显翻译腔，再决定是否交 AI 润残留 |
 | **策略一**：双角色两阶段润色 | 初翻后由独立"润色者"角色再过一轮 | 局部档 ≈ 初翻的 25%~40%；全文档 ≈ 1.7~2 倍初翻 | 有明确质量 complaint，或用户要求"更地道" |
 | **策略二**：LinguaGacha 风格前置 | 翻译时挂风格预设/自定义文风指令 | 0 额外（本就要翻） | 还没翻 / 愿意重翻 |
 | **策略二B**：LinguaGacha Agent 审校 | agent 按指定范围逐条润改 | 按指定范围计 | 不想写脚本、范围可控 |
@@ -17,12 +18,13 @@
 
 流程：
 
-1. **切批**：按对话行分批（约 200 句/批），一次只给润色者 2~3 批；批次过大会明显掉质量、术语不一致增多。
+1. **切批**：按对话行分批（约 200 句/批），一次只给润色者 2~3 批；批次过大会明显掉质量、术语不一致增多。切批与提示词生成已脚本化，见下方 5b 的 `plan_batches.py`。
 2. **翻译者角色出初稿**：`autotranslate.py translate` 结果或 AI 直接翻译均可；初稿本来就会"一看就不行"，属正常现象，润色者第一遍会做大量优秀修改。
-3. **校对润色者角色**（新会话/独立上下文，不与翻译者混用）prompt 要点：
-   - 只做三件事：去翻译腔、按角色语气改口语、修正语法；**禁止增删剧情信息**
-   - 对照 tl 文件里的原文注释（`# character "原文"`）核对语义；保护 `{tag}`、`[expression]`、`%%`、转义符不被改动
-   - 只输出修改后的整行，不改行号、标签和文件结构
+3. **审稿角色**（新会话/独立上下文，不与翻译者混用）prompt 要点：
+   - **按连续剧本通读**，不是逐行矫正。喂给它的必须是「场景标题 + 说话人 + 完整原译对照」的剧本块，表格化、截断长句都会让它退化成机翻矫正（见下方 §7 实测）
+   - **核心原则：大部分句子是好的，保持原样。** 只有确实读着别扭（语序生硬、词不达意、语气不符、前后衔接不上）才改，拿不准就不改
+   - 禁止增删剧情信息；对照 tl 原文注释核对语义；保护 `{tag}`、`[expression]`、`%%`、转义符
+   - **只输出改动过的行**（`file:line → 新译文`），判断为「不用改」的句子不进 JSON——这既省 token，也落实「只润一轮」
 4. **术语一致性**：润色前先读项目根目录 `翻译结果.md` 的"专有名词"章；批次间把新术语回写进去（相当于实战文章里"让 Claude 自己做笔记"）。润色者改了很多人名/专名时会挤占其注意力，文风润色效果随之下降——此时拆小批或先统一术语。
 5. **diff 回读**：初稿与润色稿逐行 diff，生成"行号｜原译文｜润色后"对照表供逐行接受/拒绝（VSCode diff 或脚本均可）。预期整行自动接受率约 60%，其余人工微调；被拒的行可选择性再丢给 AI 重润一次。
 6. **记录**：重大意译写入 `翻译结果.md` 的"意译与润色"章。
@@ -63,7 +65,24 @@ python autotranslate.py apply <tl_dir> --input .cache/polish_batch01.json --over
 
 ### 5. 原子化工具族（已内置：`scripts/polish/`）
 
-上述管线已拆成单一职责小工具，用法与实测注意（strings 冲突、名字框机制、原版标签 bug 假阳性、裸 `%`）详见 `scripts/polish/README.md`：`extract_say.py`（全量条目+锚点）→ `screen_suspicious.py`（翻译腔筛行）+ `screen_quality.py`（硬性质筛行，规则经验移植自 LinguaGacha）→ `../names/unify_names.py`（术语表人名统一，已归入统一名称组）→ `merge_polish.py`（AI 只写 `file:line → 新译文`，锚点自动补齐）→ `autotranslate.py apply --overwrite` 回填。
+上述管线已拆成单一职责小工具，用法与实测注意（strings 冲突、名字框机制、原版标签 bug 假阳性、裸 `%`）详见 `scripts/polish/README.md`：`extract_say.py`（全量条目+锚点）→ `screen_suspicious.py`（翻译腔筛行）+ `screen_quality.py`（硬性质筛行，规则经验移植自 LinguaGacha）→ `../names/unify_names.py`（术语表人名统一，已归入统一名称组）→ `merge_polish.py`（AI 只写 `file:line → 新译文`，锚点自动补齐；合并时过**结构守恒门**：拿润色稿与润色前译文比对标签/插值/`%` 格式符/换行数，对不上的条目直接剔除，规则取自 AiNiee 润色阶段的 ResponseChecker）→ `autotranslate.py apply --overwrite` 回填。
+
+### 5b. 切批 / 提示词 / 账本：`plan_batches.py`（2026-10-11 新增）
+
+上面第 1 步的「切批」与策略一流程第 3 步的「装上下文」此前只在文档里有原则性描述，没有脚本产出。现在由 `scripts/polish/plan_batches.py` 一次遍历做完，门面子命令 `polish`：
+
+```
+python scripts/renpy-tools-cli.py polish \
+    --pool entries.json --tl <tl目录> \
+    --candidates candidates.json quality_candidates.json \
+    --batch-size 200 -o <项目根>/.cache/polish/
+```
+
+产出三样，都落 `-o`，**不碰 tl 文件**：`batch_NNN.json`（锚点齐全，可直接进 `merge_polish` / `apply --overwrite`）、`batch_NNN.prompt.md`（本批角色表 + 禁改清单 + 上一批已定术语 + 待润条目表）、`polish_state.json`（批次号 / file 范围 / 行数 / consumed）。
+
+**为什么按「场景段合并」而不是「每场景一批」**（Dissonance 0.14 实测）：tl 里 44,409 个 `translate` 块去掉 8 位哈希后是 2,129 个场景名，但**连续**同场景段平均只有约 12 条、最长 223 条——按场景切会切出 3,659 批，比不切还糟。工具的做法是**以场景为边界、按 200 条上限合并相邻场景**：一段连续对白不会被劈成两半，同角色语气连贯；只有单场景超过上限才按条切，并标 `split: true` 提示 AI 保持术语一致。
+
+**账本语义**：跑完一批把该批在 `polish_state.json` 里标 `consumed=true` 再跑下一批；重跑时已消费的批不再产出（落实「润色只做一轮」），未消费的批会被重排（条目集合可能随筛行结果变化）。账本不会因重跑而膨胀——这是实现时踩过的坑，已由 `test_polish_batches.py` 钉住。
 
 ### 6. 种子驱动探查（方法论吸收自 LinguaGacha item-review 审校技能）
 
@@ -75,9 +94,55 @@ python autotranslate.py apply <tl_dir> --input .cache/polish_batch01.json --over
 4. **账本**：跨会话/多天的大项目在 `polish_state.json` 里记种子清单（pattern + consumed 状态），与已有批次记录并列。
 5. **边界**：种子循环是**探查循环**，不是对同一行反复润色——策略一的实测结论"润色只做一轮，越润越差"不变；种子扩大的是**调查范围**，不是单行重润次数。
 
-## 策略二：LinguaGacha 路线
+## 策略零：无 API 基于规则直接润色（`scripts/polish/direct_polish.py`）
 
-本机已装 `D:\workplace\LinguaGacha_v0.124.1_Windows_x64`。注意：**LinguaGacha 没有"polish"功能**（已核实其 main 分支技能清单：translation/glossary/text-preserve/writing-guide 等，无 polish），替代做法两条：
+适用：还没接大模型 API、或想先零成本清洗最明显的翻译腔、再决定是否把剩余条目交给 AI 润色。
+
+机制：对 `game/tl/<lang>/` 全量 say 条目逐条应用正则规则，**绝不碰 `{标签}`、`[插值]`、`%%`、`\n` 转义**，只改译文措辞；每条改写都记入 `direct_report.json`（前后对比+命中规则名），供人工复核。
+
+可执行管线（实测，Dissonance 0.14 schinese）：
+
+```
+# 1. 抽条目（锚点与 autotranslate 兼容）
+python scripts/polish/extract_say.py game/tl/schinese -o .cache/polish/entries.json
+
+# 2. 零 API 直接润色（默认 --dry-run，只出 JSON 不碰 tl）
+python scripts/polish/direct_polish.py game/tl/schinese \
+    -o .cache/polish/direct_fixes.json \
+    --report .cache/polish/direct_report.json
+
+# 3. 复核 direct_report.json，确认无误后回填（先 --dry-run 预览）
+python scripts/translate/autotranslate.py apply game/tl/schinese \
+    --input .cache/polish/direct_fixes.json --overwrite --dry-run
+python scripts/translate/autotranslate.py apply game/tl/schinese \
+    --input .cache/polish/direct_fixes.json --overwrite   # 实写，自动 .bak
+
+# 4. 如需继续交 AI 审稿残留：规则改完后重新抽条目，再切批
+python scripts/polish/extract_say.py game/tl/schinese -o .cache/polish/entries.json
+python scripts/renpy-tools-cli.py polish --pool .cache/polish/entries.json \
+    --tl game/tl/schinese -o .cache/polish/
+# 然后按 batch_NNN.prompt.md 让 AI 审稿 → merge_polish.py → autotranslate apply --overwrite
+```
+
+> 刻意不提供 `--direct-fixes`（预载改写结果）与 `--auto-screen`（内置筛行）：
+> 前者多一次 30s 的抽取就能换掉切批器里的第二份状态，后者让筛行规则多一个维护处。
+> 需要时按上面的命令序列走即可。
+
+规则分两组：
+- **SAFE**（自动应用，误伤低）：同种中文标点重复→一个；重复半角 `! ?` → 全角单个；半角 `! ? ; :` → 全角（避开 `1,000` 千分位）；多空格→一个；`将会`→`会`；`如果…的话`→`如果…`；连续的的→`的`；`哦我的天`→`天哪`。
+- **REVIEW**（`--include-review` 才开启）：`被`+1~4 汉字→去掉`被`；`作为一个`→去掉。这两条有误伤风险，建议先看报告再决定。
+
+边界：只做机械改写，不做语义层意译；角色语气、文风统一、术语漂移仍需策略一的 AI 润色。结构守恒由 `merge_polish.py` 门面把关（与 `direct_polish` 内部自检同口径）。
+
+---
+
+## 策略一：双角色两阶段润色（实测工作流）
+
+来源：18 万字游戏对白实战（见文末来源①）。关键实测数据：初稿修改率约 75%（200 行改 150+），抽查 99% 的修改为正向改善；**润色只做一轮**——让润色者对自己再润一遍，好坏改动五五开，越润越差。
+
+流程：
+
+1. **切批**：按对话行分批（约 200 句/批），一次只给润色者 2~3 批；批次过大会明显掉质量、术语不一致增多。切批与提示词生成已脚本化，见下方 5b 的 `plan_batches.py`。
 
 > 2026-10-06 更新：其**质量判定经验已移植**成本仓库 `scripts/polish/screen_quality.py`（外文残留聚合+豁免、相似度漏翻 Jaccard、免翻清单；出处见该脚本头部注释），用本仓库管线即可获得同款硬性质校，不必为此启动 LG 本体。
 
@@ -87,8 +152,31 @@ python autotranslate.py apply <tl_dir> --input .cache/polish_batch01.json --over
 
 局限：Ren'Py tl 文件的支持情况以实际导入为准；`{w}`、`{nw}`、`[变量]` 等 Ren'Py 特有标记的保护必须在自定义指令里写明，不能依赖其通用规则。
 
+## 7. 审稿 vs 机翻矫正：喂什么决定得到什么（2026-10-18，Dissonance 0.14 实测）
+
+策略一早期实现把批次渲染成 `| file:line | 角色 | 原文 | 译文 |` 表格、原文译文一律截断到 90 字、角色设定为「去翻译腔/改口语/修正语法」三件事。实测它做出来的是**机翻矫正**，不是审稿——模型拿不到连贯上下文，只能逐行找茬。
+
+| 问题 | 实测数据 | 后果 |
+|------|---------|------|
+| 原文截断到 90 字 | 17,485 / 44,387 = **39.4%** 的行原文被砍半 | 读半句判断不了语病，也判断不了衔接 |
+| 表格化逐行孤立 | 全部 44,387 行 | 看不到「这句接上一句」，无从谈上下文流畅 |
+| 角色=「做三件事」 | 全部批次 | 暗示每行都要改，**违反本文档自己的结论「越润越差」** |
+| 跨场景批次 | 612 / 1541 批（40%）混多场景；25,217 条（57%）落在被切碎的 `split` 场景里 | 场景边界被打散，同角色语气连贯性受损 |
+
+**改法（已落地在 `plan_batches.py`）**：
+
+1. **渲染成连续剧本块**：`### 场景：<name>` + `` `file:line` 角色：`` + `原：` / `译：`。模型读到的是一段戏，而不是一堆四元组。
+2. **不截断长句**：上限提到 400 字。实测该库最长 orig 仅 200 字出头，**新版零截断**（旧版 39.4%）。
+3. **角色改为「中文审稿人」**，显式写入「大部分句子是好的，保持原样」「拿不准就不改」「禁止为了改而改」。
+4. **只输出改动行**：判断为「不用改」的不进 `fixes.json`；`merge_polish.py` 另会剔除模型仍输出、但值与旧译文相同的条目（`[跳过]`，回填与否等价，留着只污染 diff 与统计）。
+
+**代价**：prompt 体积 +16.1%（约 236 万 → 274 万 token/全库，按 40 句/批计）。但**输出侧大幅缩减**——若 AI 平均只改 10% 的行，回填量从 44,387 条降到约 4,438 条。净 token 更省，且改的是真正不通顺的地方。
+
+> 补充实测（同库，2026-10-18 复算）：连续同场景段共 3,637 个，最长 223 条（`hallo10`），中位数仅 1 条——这正是「按场景合并相邻场景而非每场景一批」的依据。单场景跨段合计最多的是 `day_six_menu` 449 条。
+
 ## Token 成本对照
 
+- 策略零（无 API 规则直接润色）：0 token，零 API 密钥
 - 全文双角色润色 ≈ 1.7~2 倍初翻量（初稿输入 + 润色输出）
 - 局部润色（先本地规则/人工筛出可疑行，只润这些）≈ 初翻量的 25%~40%
 - 风格前置重翻 = 1 倍翻译量（本来就要翻，零额外）
@@ -99,3 +187,47 @@ python autotranslate.py apply <tl_dir> --input .cache/polish_batch01.json --over
 - ① [流程分享：18 万字游戏对白中译英，AI 辅助 5 天完成（indienova）](https://indienova.com/indie-game-development/180000-word-game-dialogue-translated-from-chinese-to-english-ai-assisted-completion-in-5-days/)
 - ② [如何让小模型也能大幅提升翻译质量：拆分 Prompt 两轮翻译润色（宝玉）](https://baoyu.io/blog/prompt-engineering/divide-your-prompt-to-mutiple-prompts)
 - ③ [LinguaGacha 仓库](https://github.com/neavo/LinguaGacha)（内置技能清单与审校文档已核实）
+
+## 8. 轻度润色无人值守档（2026-10-22，Dissonance 0.14 三批复盘）
+
+> 用户需求："轻度润色只需保持上下文流畅，无需完美精致"。此档 = **AI 端到端替代人工**，
+> 接受标准放宽为「读着通顺、事实不错、术语一致」，不追求文学级。
+
+### 三批实测结论（Dissonance 0.14 schinese，约 4.6 万行）
+
+| 发现 | 数据 | 对流程的含义 |
+|------|------|-------------|
+| AiNiee 精调初翻质量中上 | 单文件抽查修改率仅 **3~8%**（对比 18 万字实战初翻的 75%） | 轻度档的价值不在逐行加工，在**术语统一 + 完整性修复** |
+| 术语暗病跨文件 | 活动室/娱乐室 61:19、主事件/主线事件、查看/观看 28:24、Koi Cafe 三种写法 | 一轮全局术语审计 ≈ 十个文件逐行润色的收益 |
+| 历史结构损伤隐藏在库里 | 全库引号奇偶扫描抓出 **4 行**损坏（历次 .bak 轮换丢失配对） | AI/人工过稿之前必须先跑完整性检查——这类行不修会显示错乱甚至崩 |
+| 半角标点禁入中文正文 | `"透.*"`、`..?` | typography 检查已覆盖，终检别漏 |
+| 「您」误报风险 | 学生对老师敬语 219 处全部成立 | **禁止**无脑全局替换,敬语判定靠语境 |
+| AI 整理清单时的转码遗漏 | 批 2 计划 53 条实写 51 条(hallo4 两行被吞),靠**抽查落盘行**抓回 | fixes 清单产出后必须 grep 回读核对键数;抽样自审不可省 |
+
+### 无人值守档流程（轻度标准）
+
+1. **完整性先行**(零 token):`tl_check.py` → 全库引号奇偶校验(见下方一行命令)→ `check_typography.py`
+2. **全局术语审计**(一轮,非逐文件):`check_duplicate_translations.py` + 关键词扫描
+   (场所/称呼/系统词),统一后把术语写进项目根 `翻译结果.md`
+3. **AI 剧本块批次**:`plan_batches.py` 切批(按 §7 规范),AI 通读场次,只改真别扭行
+4. **回填 + 终检**:`merge_polish.py` 结构守恒 → `autotranslate.py apply --overwrite`
+   → 重跑第 1 步确认 0 异常
+5. **抽样自审**:每批随机抽 10 行人工级检查(自己抽自查,发现误区即回写本档)
+
+引号奇偶校验一行命令(PowerShell,可发现历史损伤):
+
+```powershell
+Get-Content <tl目录>\*.rpy -Encoding UTF8 | Select-String '^\s+\w* ?"' |
+  Where-Object { ([regex]::Matches($_.Line, '"')).Count % 2 -ne 0 }
+```
+
+### 翻译腔规则(已入 screen_suspicious.py RULES,2026-10-22)
+
+三批复盘提炼的高频硬译,权重 1(只作找别扭用,不直接判违规):
+`假设[一它这那你我]`、`对此[，。]`、`总而言之`、`(?<!，)不是吗[？?]`(不留逗号变体)。
+
+### 人工保留职责(轻度档仍有必要)
+
+- **风格定调**:整部作品的语气(如"轻小说腔 vs 中性书面")需人拍板
+- **尺度把控**:H 场景/俚俗表达的度,AI 按上下文保守处理,重定调再升级
+- **全库级决策**:如统一改"前辈→先辈"这类涉及人称关系的取舍
