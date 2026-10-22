@@ -17,7 +17,7 @@ python checks/tl_check.py MyGame-1.0-pc --lang-ratio 0.75                    # �
 ```
 
 `all` 覆盖：`ui` `misuse` `func` `auto` `charname` `crash` `fontcheck` `langcheck`
-`integrity` `label` `type` `duplicate` `button` `typography` `tlcheck` `fmtlint` `untranslated`。
+`integrity` `label` `type` `duplicate` `button` `typography` `tlcheck` `fmtlint` `payloadscan` `untranslated`。
 
 两点与直觉不同，按下面理解才不会误判：
 
