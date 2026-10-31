@@ -26,6 +26,7 @@
 按 [text2script_workflow.md](text2script_workflow.md) 执行（输出结构 / 命名 / 演出注释前缀 / 资产文档格式），此处只补主线相关的三点：
 
 - **长篇按章交付**：每章落盘即验证一轮（见第 6 步），不要攒到最后
+- **逐章进度落账本**：长篇创作跨会话续跑时，进度记 `<项目根>/.cache/creation_state.json`（`phase / done / next / decisions` 字段与续跑仪式同 [translation_workflow.md](translation_workflow.md) 第 0 节；创作流阶段编号 C0 立项门 → C1 骨架 → C2 逐章落盘 → C3 打包交付，`phase` 用这套编号）。每完成一章先落账本再写下一章
 - **资产文档照常产出**：`game/assets/<剧幕名>_assets.md` 里的 AI 提示词 / 搜索关键词是给用户的美术生产输入
 - **角色集中声明**：`Character.rpy` 唯一，新章先查已有角色再追加
 

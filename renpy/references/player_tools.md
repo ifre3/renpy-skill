@@ -40,6 +40,8 @@ python "$TOOLS/renpy-tools-cli.py" charname <项目路径> -l schinese
 | **unrpyc** | 仅 rpyc 反编译（经典，兼容到 Ren'Py 6） | GitHub: CensoredUsername/unrpyc |
 | **rpa-toolkit** | .rpa/.rpi 解包 + .rpyc/.rpymc 反编译（rpatool 停更后的现代替代） | GitHub: regiellis/rpa-toolkit |
 | **Universal Ren'Py Mod (URM)** | 通用游戏内 Mod：变量查找/修改/冻结/监控、场景查找与重放、**查看并选择隐藏/锁定选项**、路径 / if 语句检测、存档管理（重命名/移动/删除）、**任意角色显示名重命名**、文本框自定义、quickmenu 自定义 | 0x52.dev（官方）https://0x52.dev/mods/Universal-Ren-Py-Mod-1000，v2.6.2 / 1.1 MB，**要求引擎 ≥6.99.14**；下载 Mod 文件放进游戏 `game/` 目录，不动原游戏文件（官方设计约定：删除即完全还原） |
+| **Universal Ren'Py Walkthrough**（BCassO） | **攻略 mod**（不是上面的 Mod）：Alt+W 面板自动显示每个选项的后果与跳转、AST 深度分析、菜单智能识别、变量实时追踪、编译后游戏可用、游戏内自动更新 | 本机留档 `cache/Universal-RenPy-Walkthrough/`（GitHub: BCassO/universal-renpy-walkthrough，要求引擎 ≥6.99.14）；投放式：把 `__urw/` 文件夹拷进游戏 `game/` 目录，不动原游戏文件 |
+| **RenPy-WTForge**（huchukato） | 攻略**生成器 GUI**：扫描游戏 rpa/rpyc → 自动分析选项 → 生成带颜色标记的 `wtmod.rpy`（可自定义提示标签 + 画廊解锁器），免写代码 | 本机留档 `cache/RenPy-WTForge/`（GitHub: huchukato/RenPy-WTForge，v1.2.1，Python 3.9+）；`python wt_tool.py` 或双击 `start.bat` |
 | **SaveEditOnline / Griviewer** | 网页版存档编辑（无 Python 环境的玩家用） | 网页直接用 |
 | **Game Mod Kit** | 在线全家桶：RPA 解包 + rpyc 反编译 + 存档编辑 + APK | gamemodkit.com |
 | **Lunatranslator** | 游玩生肉时的 HOOK 提取文本 + 翻译 | GitHub: HIllya51/LunaTranslator（官网 lunatranslator.org），活跃维护 |

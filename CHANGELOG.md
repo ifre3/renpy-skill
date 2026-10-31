@@ -3,6 +3,182 @@
 本文件是评审与修复流水（按时间倒序）。技能能做什么看 [README.md](README.md)，
 入口与命令看 [renpy/SKILL.md](renpy/SKILL.md)。
 
+### 2026-10-31（第九批）：线性模式生成器——半自动范式 + 三处机制修复
+
+**背景**：用 `linear add` 给 AfterDark 0.26 生成补丁后实测，暴露 4 个机制级问题，
+并确立「半自动线性」设计原则（选项与分支保留、沙盒机制跳过）。
+
+**修复**（生成器 `linear_mode.py` 模板同步）：
+
+- **JumpException 被吞**：模板回调的 `except Exception` 把 `renpy.jump` 抛的
+  `JumpException` 也吞了，导致「按钮 ON 但永不跳转」。改为 `except renpy.game.JumpException: raise`
+  放行，由引擎主循环（execution.py）完成跳转。这是"按钮亮但不生效"的根因。
+- **剧情性表外标签被误跳**：自动播放把不在 LM_STORY 的标签一律当导航跳过，但
+  `actualintro`（开场独白）/`story1congun`（枪战戏）这类剧情标签在表外会被跳过断片。
+  治理方向写进 docstring/README：**表外剧情性标签必须手工纳入 LM_STORY**（生成器无法判断叙事结构）。
+- **FF 快进 day 计算非法值**：`(day%7)+1` 在 day=7 时产出 8（星期画面卡死）。改为
+  `(day+1) % LM_DAY_MOD`，新增 `LM_DAY_MOD` 常量（AfterDark=8，其他游戏常见 7）由用户按游戏校准。
+
+**新增能力**（生成器模板）：
+
+- `LM_GATES` 好感/天数补偿表 + `lm_compensate`：进入门控事件前自动补齐 `totaldays`/`affection`，
+  解决跳过日常导航导致的状态冻结（占事件表 60%+ 的门控事件条件永远不满足）。默认空表，按游戏调度链填。
+- `lm_done` 进度标记：已播场景目录标灰删除线，重进线性可续播。
+- 清理模板里 `lm_label_callback` 的残留死代码（重复的 `st.lm_pos = idx / return`）。
+
+**文档**：
+
+- `sandbox_linear_design.md` 新增「三·五、半自动线性范式（选项保留、沙盒跳过）」——
+  含三路线对比表（全自动 LostInYou / call 链 Dissonance·FC / 半自动 AfterDark 补丁），
+  明确 `menu` 在剧情标签内部、callback 不干预，是"选项保留"的实现基础。
+- `scripts/README.md` linear 一节 + 行数声明（1003→1052）同步。
+
+**验证**：`python -m unittest discover` 614 用例 OK（约 75s，含 `test_repo_consistency`
+文档↔代码数字自洽）。
+
+### 2026-10-27（第八批）：母语流畅档落地到 prompt 模板
+
+**背景**：文档把默认档升为「母语流畅」（重构时只改了 translation_polish.md 与
+SKILL.md），但 `plan_batches.py` 的 `render_prompt` 模板仍是旧「中文审稿人/
+大部分保持原样」文案——标准没落到 AI 实际读到的指令里。
+
+**改动**：`render_prompt` 升级为母语流畅档：角色=中文母语审稿人、目标=像简体
+中文母语者写的、判据=读着不像母语者写的才改（语序重组/增删连接词/拆分长句均可，
+通顺的保持原样）、只做一轮；新增 `context_hint` 参数，`<项目根>/.cache/polish/
+context.md` 存在时自动带「全局上下文」段（先读章节核心再读剧本）。低扰动档
+策略一B 未单独设模板，需要时手改「标准」段。文档第 4 步已标注落地。
+验证：`test_polish_batches` 50 项 OK（新增 TestNativeFluencyPrompt 3 项：
+母语/流畅字样、语序重组许可、context 提示开关）。
+
+### 2026-10-27（第七批）：筛行/自动规则增补——全库自动改写 701 条
+
+**来源**：抽查 fixes_003 实测，提炼 4 条机器可枚举的机翻残留模式。
+
+**改动**：`screen_suspicious.py` +3 条规则（〔…〕角色标记残留 / 纯单英文词未译 /
+拟声 hhh 残留）；`direct_polish.py` +1 条 SAFE 自动改写（删〔…〕角色标记）。
+实测（Dissonance 44,387 条）：自动改写 701 条（占 1.6%，零 token）；可疑行 210 条
+需 AI。已知边界：纯单英文词规则会误报人名（实测 'Sada'），暂无专名白名单。
+
+### 2026-10-27（第六批）：长流程续跑契约 + 引号奇偶检查内建（E012）
+
+**背景**：用户问「作为（半）自动化的 skill，为了长流程执行要不要做设计调整」。
+评估结论：骨架（账本/幂等/安全网/终检门）已对，缺口在跨会话续跑契约不统一、
+无人值守档的引号奇偶校验只有 PowerShell 一行命令（Linux/macOS 上是空的）。
+
+**改动**：
+
+- **续跑契约（唯一出处 = `translation_workflow.md` 第 0 节）**：所有长流程在
+  `<项目根>/.cache/<flow>_state.json` 落账本（`phase / done / next / decisions`）；
+  命名阶段 T0–T5（汉化）/ C0–C3（创作）；**用户门决定落 `decisions`，同一项目
+  不重问**（答过一次记账本，后续会话只汇报沿用）；续跑仪式四步：读账本 →
+  零 token 复查 → 从 `next` 继续 → `done` 不重做。`translation_polish.md` §3、
+  `game_creation_workflow.md` 第 3 节、SKILL.md 主表/注意事项挂指针。
+- **回滚单元文档化**：`batch_NNN.json` 存 plan 时点润色前译文 = 天然快照，
+  回滚 = 对调新旧值重放 `apply --overwrite`，逐批互不牵连（`translation_polish.md` §3）。
+- **并行扇出可选档**（`translation_polish.md` §9）：术语表冻结 + context.md 产出后
+  批次独立，可交子代理并行，代价是丢「上一批已定术语」接缝（改全量前置替代）；
+  仅用户嫌慢时启用，不做默认。
+- **fmtlint 新增 E012 引号奇偶**：剥掉 `\"`/`\\` 转义后逐行数双引号，奇数即报
+  （problem 级，进退出码）；`old`/`new` 行仍由 E001 精确判定不重复报。跨平台
+  取代无人值守档的 PowerShell 一行命令（`translation_polish.md` §8 已改指 fmtlint）。
+  已知边界：tl 内嵌 python 块单独成行的 `"""` docstring 会误报，tl 里极罕见。
+
+**验证**：`test_fmtlint` 17→22 用例全绿（新增 TestQuoteParity 5 例：损伤两形态、
+转义不误报、old/new 不双报、problem 级）；全量 606→611 用例（README /
+SKILL.md / scripts/README.md 三处计数同步）。
+
+### 2026-10-27（第五批）：批次大小实测——200 偏大，默认改 150
+
+**背景**：用户问「200 句/批合理吗」。对 Dissonance 0.14 schinese（44,387 条）用
+`plan_batches.py` 做 100/150/200/300 四档实测，按 `(file,line)→场景名` 映射统计
+批大小与跨场景混合。
+
+**实测结论**：
+
+| batch-size | 批数 | 平均/批 | 跨 10+ 场景批占比 | 单场景批占比 |
+|---|---|---|---|---|
+| 100 | 574 | 77 | **10%** | 27% |
+| 150 | 384 | 116 | **21%** | 19% |
+| 200 | 263 | 172 | **37%** | 7% |
+| 300 | 169 | 263 | **59%** | 1% |
+
+- 200 虽然省 token（263 批），但 37% 的批跨 10+ 场景——AI 读的"一段戏"是碎片拼合，
+  撞上 §7 批评过的跨场景问题；300 更差。
+- 100 最健康（跨 10+ 仅 10%），150 是成本/质量平衡点；四档 split 均为 0（本库连续
+  场景段最长 223 条 < 300）。
+
+**改动**：`plan_batches.py` `DEFAULT_BATCH_SIZE` 200→150（docstring 同步）；
+`translation_polish.md` 新增「批次大小实测」节 + 策略一B「约 200 句/批」改 150。
+验证：`test_polish_batches` + `test_repo_consistency` 60 项 OK。
+
+### 2026-10-27：润色体系重构（校对 vs 润色分层 + 母语流畅档）
+
+**背景**：用户提出两点：① 策略零（`direct_polish.py` 规则层机械改写）应归类为
+**校对工具**而非润色；② 明确质量标准 = **目标语言母语者读得流畅**（对文学性无规定），
+必要时**略读全文 + 罗列章节核心**作辅助信息。
+
+**做法**（`translation_polish.md` + SKILL.md）：
+- 策略零改称「校对档（非润色）」，归入 `tl_check` / `screen_quality` 同族，只在
+  机械硬伤（标点/高频翻译腔），不碰语义语气文风。
+- 原「策略一（双角色两阶段审稿）」改名 **策略一B：低扰动审稿档**（默认大部分不改）；
+  新设 **策略一：母语流畅档（默认）**：标准 = 母语者读得流畅、无文学性要求；流程 =
+  校对前置 → 略读全文（约 5~10% 体量，落 `.cache/polish/context.md`）→ 罗列章节核心
+  （每章 2~4 条：主线/情节/人物/专名/语气）→ 连续剧本块润色，判据放宽为「读着别扭/
+  不像母语者就改、通顺保持原样」→ 仍只输出改动行 + 结构守恒门 + **只做一轮**（辅助
+  信息让第一轮更准，不增轮数）。
+- 修正文档历史遗留：第二个重复的「策略一」标题段（实为策略二/二B 内容）改名
+  「策略二/二B 详情」。
+
+**验证**：`test_repo_consistency` 回归（索引/数字守门）。
+
+### 2026-10-26（第三批）：社区资产分层（大工具 vs 个人脚本/经验）
+
+**背景**：用户澄清「社区工具」指**个人脚本和社区经验**，而非 AiNiee/MTool 这类
+大工具。此前工具地图未区分，会把两者混为一谈。
+
+**做法**：`community_playbook.md`「四、社区工具生态地图」补分层说明——① 大工具
+（面向人的成品软件，AI 驱动不了）；② 个人脚本+社区经验（skill 的**上游信号源**，
+优先级高于①：skill 的价值 = 验证 → 沉淀 → 变成可重复工具）。
+
+### 2026-10-26（第二批）：社区工具生态调查入账（工具地图 + 3 条新经验）
+
+**背景**：用户问「skill 工具和社区工具一样高效好用吗」，检索 AiNiee / MTool /
+unrpyc / rpycdec / unrpyc-pure / RenpyThief / LunaTranslator / GalTransl /
+Ren'Py 官方 9 个生态点的发行页与讨论，核实维护状态与社区公认教训。
+
+**结论（已写入台账）**：两类工具是不同定位——skill 面向 AI 无人值守全链路
+（CLI + 606 测试守门）；社区工具面向人类玩家（GUI、跨引擎、更新卷、单点）。
+翻译质量维度双方在卷同一痛点（长句重组/上下文/变量安全）：AiNiee 7.1.1 修复
+「renpy 翻译后变量消失」、MTool 分句切割损害质量（LinguaGacha 文档），而 skill
+润色管线本就「不截断长句、连续剧本块」——同一思路的不同实现。
+
+**做法**：`community_playbook.md` 新增「四、社区工具生态地图」（9 行表：工具/
+形态/定位/维护状态/与 skill 的关系 + 选谁判据）；已验证经验账追加第 9-12 条
+（翻译破坏变量、MTool 分句、unrpyc 双分支与混淆边界、生态活跃度实测）。
+文档数不变（20，未新增文件），测试守门要求满足。
+
+### 2026-10-26：社区经验首批入库（沙盒/线性模式 + 学习台账）
+
+**背景**：连续分析三个 Ren'Py 发行版（AfterDark 0.26 沙盒、Dissonance 0.14 线性、
+Lessons in Love 汉化提示系统）并检索社区（Lemma Soft / F95 / itch），沉淀出
+skill 此前没有的两类知识：沙盒/线性模式的**架构范式**与**社区验证经验**；以及
+「不断学习社区经验、不脱节」的**机制**。此前 `linear` 工具只有工程实现
+（analyze/add/modify），知识层无对应参考。
+
+**做法**：新增两篇参考（18 → 20）：
+
+| 文件 | 分区 | 内容 |
+|------|------|------|
+| `renpy/references/sandbox_linear_design.md` | 写游戏 / 引擎行为 | 双模式设计共识（Lost in You 作者原话）、沙盒分层范式（时间×地图×调度 label 条件链，AfterDark 脚本核实）、线性链模板（Dissonance linear.rpy 源码核实）、线性化避坑清单（LiL Linear Mode Mod 玩家实测 bug）、事件追踪器最小实现 |
+| `renpy/references/community_playbook.md` | 排错 / 工程 | 社区渠道清单（学什么→去哪学）、已验证经验账（8 条首批，带来源 URL 与验证分级：源码核实/作者原话/玩家实测）、更新机制（触发时机/学习流程/验证纪律/定期复查） |
+
+**同步**：SKILL.md「你说→它做」补 `linear add` 入口行 + 两个分区索引挂载；
+根 README 与 references/README 的数字 18→20（共 21 个 md）；分区轴表格补
+「沙盒/线性架构范式」与「维护 skill」场景。
+
+**验证**：`scripts/tests` 回归（references 双向索引、命名、数字声明由
+`test_repo_consistency.py` 自动校）。
+
 ### 2026-10-21：全库数字声明扫描（守门网从 3 份文档扩到全库 md）
 
 **背景**：`test_repo_consistency.py` 原本只盯三份主文档（root README / SKILL.md /

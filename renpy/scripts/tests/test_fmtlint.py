@@ -162,6 +162,59 @@ class TestScansAllTranslationForms(unittest.TestCase):
             self.assertIn("E009", codes)
 
 
+class TestQuoteParity(unittest.TestCase):
+    """E012 引号奇偶：say 行形式的引号损伤只有这里抓得到。
+
+    2026-10-22 三批复盘实测：全库引号奇偶扫描抓出 4 行历史损伤（历次 .bak
+    轮换丢失配对），当时只能靠 PowerShell 一行命令；现内建为 E012（跨平台，
+    入 all）。剥转义后再数（`\\"` 不计），所以转义引号不误报。
+    """
+
+    def test_open_string_in_say_line_flagged(self):
+        """丢闭合引号：E001 只查 old/new 行，say 行损伤必须由 E012 抓。"""
+        with tempfile.TemporaryDirectory() as d:
+            p = _write(d, "a.rpy",
+                       'translate schinese x_1:\n\n'
+                       '    # e "Hi"\n'
+                       '    e "他说：好\n')
+            codes = [c for c, _ln, _m in L.check_file(p, "schinese")]
+            self.assertIn("E012", codes)
+
+    def test_odd_unescaped_quotes_flagged(self):
+        """中间丢一半配对：3 个未转义引号 → 奇数 → 报。"""
+        with tempfile.TemporaryDirectory() as d:
+            p = _write(d, "a.rpy",
+                       'translate schinese x_1:\n\n'
+                       '    # e "Hi"\n'
+                       '    e "他说"好"\n')
+            codes = [c for c, _ln, _m in L.check_file(p, "schinese")]
+            self.assertIn("E012", codes)
+
+    def test_escaped_quotes_not_flagged(self):
+        """`\\"` 先剥掉再数：转义引号不构成奇偶误报。"""
+        with tempfile.TemporaryDirectory() as d:
+            p = _write(d, "a.rpy",
+                       'translate schinese x_1:\n\n'
+                       '    e "A \\"B\\" C"\n')
+            codes = [c for c, _ln, _m in L.check_file(p, "schinese")]
+            self.assertNotIn("E012", codes)
+
+    def test_old_new_lines_not_double_reported(self):
+        """old/new 行的引号闭合由 E001 精确判定，E012 不重复报。"""
+        with tempfile.TemporaryDirectory() as d:
+            p = _write(d, "a.rpy",
+                       'translate schinese strings:\n'
+                       '    old "Hi"\n'
+                       '    new "你好\n')
+            codes = [c for c, _ln, _m in L.check_file(p, "schinese")]
+            self.assertIn("E001", codes)
+            self.assertNotIn("E012", codes)
+
+    def test_e012_is_problem_level(self):
+        """引号不闭合会显示错乱甚至解析失败，必须进退出码。"""
+        self.assertEqual(L.SEVERITY["E012"], "problem")
+
+
 class TestCheckerContract(unittest.TestCase):
     """fmtlint 必须走检查器契约，否则门面和 all 发现不了它。"""
 

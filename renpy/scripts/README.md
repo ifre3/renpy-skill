@@ -8,7 +8,7 @@
 
 ```bash
 python renpy-tools-cli.py list                          # 列出所有工具
-python renpy-tools-cli.py all MyGame-1.0-pc -l schinese # 一键检测（18 项只读检查）
+python renpy-tools-cli.py all MyGame-1.0-pc -l schinese # 一键检测（19 项只读检查）
 python renpy-tools-cli.py integrity MyGame-1.0-pc -l schinese  # AI 翻译后核心检查
 python renpy-tools-cli.py untranslated MyGame-1.0-pc/game/tl/schinese --all  # 空译文
 python renpy-tools-cli.py lint MyGame-1.0-pc --sdk D:/renpy-sdk              # SDK lint
@@ -17,7 +17,7 @@ python checks/tl_check.py MyGame-1.0-pc --lang-ratio 0.75                    # �
 ```
 
 `all` 覆盖：`ui` `misuse` `func` `auto` `charname` `crash` `fontcheck` `langcheck`
-`integrity` `label` `type` `duplicate` `button` `typography` `tlcheck` `fmtlint` `payloadscan` `untranslated`。
+`integrity` `label` `type` `duplicate` `button` `typography` `tlcheck` `fmtlint` `payloadscan` `tlcoverage` `untranslated`。
 
 两点与直觉不同，按下面理解才不会误判：
 
@@ -30,7 +30,7 @@ python checks/tl_check.py MyGame-1.0-pc --lang-ratio 0.75                    # �
 
 ```
 scripts/
-├── renpy-tools-cli.py                  🏠 统一 CLI 入口 (35 个子命令，双击或命令行运行)
+├── renpy-tools-cli.py                  🏠 统一 CLI 入口 (36 个子命令，双击或命令行运行)
 ├── unrpyc.py                           🔓 rpyc 反编译兜底 (下载固定 commit 的 unrpyc 源码后 import 执行)
 ├── README.md                           📄 本说明
 ├── sdk/                                🛠️ SDK CLI 封装（需 Ren'Py SDK，另见 references/sdk_config.md）
@@ -53,7 +53,7 @@ scripts/
 │   ├── check_type_safety.py            ── Python 类型安全
 │   ├── lint_check.py                   ── SDK lint + 翻译专项检查 (CLI `lint` 命令)
 │   ├── lint_report.py                  ── fmtlint 的人工深挖视图（old 上下文 + 分文件计数；不入 all）
-│   ├── lint_rpy.py                     ── tl 格式层 lint（引号/块ID/行尾/缩进/超长行/长度比；CLI `fmtlint`，入 all）
+│   ├── lint_rpy.py                     ── tl 格式层 lint（引号/引号奇偶/块ID/行尾/缩进/超长行/长度比；CLI `fmtlint`，入 all）
 │   ├── check_translation_integrity.py  ── 翻译完整性: 角色/任意表达式/标签结构/转义
 │   ├── check_untranslated.py           ── 智能未翻译检测 (支持 --csv 导出)
 │   ├── check_charname_translation.py   ── 角色名字框完整性审计 (可 --stub 生成骨架)
@@ -63,6 +63,7 @@ scripts/
 │   ├── check_i18n.py                   ── 多语言链路测试 (CLI `langcheck`，入 all)
 │   ├── check_typography.py             ── 字号与排版合理性 (CLI `typography`，入 all)
 │   ├── check_payload.py                ── 混淆载荷体检：区分引流/汉化 (CLI `payloadscan`，入 all，只读)
+│   ├── check_tl_coverage.py            ── 源脚本↔tl覆盖对照：找出没有译文文件的源脚本 (CLI `tlcoverage`，入 all，只读)
 │   ├── renpy_screen_calls.json.example ── 自定义 screen 名清单模板 (改名成 .json 生效，见 references/tools_boundaries.md)
 │   └── check_crash_risks_guide.md      ── 崩溃检测使用说明
 ├── translate/                            🌐 翻译写入类工具（只读检查器已全部归位到 checks/）
@@ -118,19 +119,20 @@ scripts/
     ├── test_say_parse_contract.py     ── say 解析器契约回归（9 用例，原差分验证的可复现版）
     ├── test_crash_risks.py            ── 崩溃检测器误报边界回归（23 用例）
     ├── test_config_loaders.py         ── 外置 JSON 配置加载器（13 用例）
-    ├── test_cli_surface.py            ── CLI 门面 35 子命令 --help 契约（7 用例）
+    ├── test_cli_surface.py            ── CLI 门面 36 子命令 --help 契约（7 用例）
     ├── test_fonts_i18n.py             ── check_fonts/check_i18n/rpa_index 契约（31 用例）
     ├── test_urm_install.py            ── URM 安装门界/回滚/不越权（29 用例）
     ├── test_checks_zoo.py             ── checks/ 零覆盖检查器契约 + 重复函数形态 + 转义回归（37 用例）
     ├── test_write_tools_smoke.py      ── 零覆盖写工具冒烟：不写脏数据/不建目录/产物定位（14 用例）
-    ├── test_polish_batches.py         ── 润色切批：场景不劈开/账本幂等/锚点齐全 + 剧本提示词契约 + Tier A/B 分层 + merge 结构守恒门与未改动行剔除（47 用例）
-    ├── test_fmtlint.py              ── tl 格式层 lint：BOM/排版级/E009 误报边界 + 契约（17 用例）
+    ├── test_polish_batches.py         ── 润色切批：场景不劈开/账本幂等/锚点齐全 + 剧本提示词契约 + Tier A/B 分层 + merge 结构守恒门与未改动行剔除（50 用例）
+    ├── test_fmtlint.py              ── tl 格式层 lint：BOM/排版级/E009 误报边界 + 引号奇偶 E012 + 契约（22 用例）
     ├── test_screen_quality.py         ── 硬性质校筛行契约 + 误报边界回归（24 用例，含 2026-10-06 截图例句锚点）
     ├── test_checker_contract.py       ── 检查器契约层 + 只读红线 + CLI/run 退出码一致（27 用例）
     ├── test_tool_registry.py          ── 门面注册表自洽 + -l 透传防复发 + requires_tl 实测校验（25 用例）
-    ├── test_repo_consistency.py       ── 文档 ↔ 代码自洽：链接 / 目录 / 脚本清单 / 全库数字声明（12 用例）
+    ├── test_repo_consistency.py       ── 文档 ↔ 代码自洽：链接 / 目录 / 脚本清单 / 全库数字声明（13 用例）
     ├── test_tag_repair.py             ── tag_repair 结构修复层：修复正确性 + 健康句不许改动（20 用例）
     ├── test_tl_check_crash.py         ── tl_check 崩溃级规则：裸 % 未转义 + 伪插值[非ASCII] + BOM/行尾不被改写 + 术语一致性/语言分块判定（27 用例）
+    ├── test_tl_coverage.py            ── 源↔tl覆盖对照：镜像匹配/空格归一/tl自产文件/退出码语义（8 用例）
     ├── test_typography.py             ── 字号与排版合理性：字号下限/outline 阈值/硬编码 size/--no-tl/--severity（20 用例）
     ├── test_names_glossary.py         ── 人名取证：define+颜色标签写法识别 + 动态名与 tl 侧不误收（6 用例）
     ├── test_namebox_shared.py        ── 名字栏共享层：三类说话人识别 + 全串精确匹配 + 标签保留拼接（28 用例）
@@ -141,10 +143,10 @@ scripts/
 
 全部只读，唯一例外是用户显式点名的导出：`check_untranslated --csv`、`check_charname_translation --stub`。会写文件的工具在 `translate/`。
 
-- **检查器契约**：每个检查器声明模块级 `CHECKER`（`name` / `summary` / `takes` / `requires_tl`），门面的子命令→路径映射从这里派生，不再手写 35 项表。漏 `-l` 透传由 `test_tool_registry.py` 防复发；只读红线由 `test_checker_contract.py` 钉死。
+- **检查器契约**：每个检查器声明模块级 `CHECKER`（`name` / `summary` / `takes` / `requires_tl`），门面的子命令从这里的 `CHECKER` 派生 name/summary/takes/requires_tl；「子命令名→脚本路径」这层映射仍是手写的 `TOOL_SCRIPTS`（路径是文件系统的客观事实，不由脚本自报）。漏 `-l` 透传由 `test_tool_registry.py` 防复发；只读红线由 `test_checker_contract.py` 钉死。
 - **`check_label_issues.py` 边界**：两遍扫描（先收集全项目标签再判引用），跨文件跳转不误判；只认**语句位置**的 jump/call（屏蔽对白里的 "jump you"）。已知噪音（WARNING 可忽略）：MISSING_RETURN 会把"靠 jump 结束"的标签算上、ORPHAN_LABEL 是没人跳转的标签。默认跳过 `tl/`（`--include-tl` 可开）。
 - **名字框机制**：`who` 显示走 `substitute(translate=True)` → `translate_string`，所以名字框是否显示中文**取决于 tl 里有没有 `old "名字"` 完全匹配的条目**，与名字定义在哪无关。审计用 `check_charname_translation.py`（`--stub` 可导出待填骨架）——`check_auto_trans.py` 只覆盖 menu 等字符串，不覆盖仅出现在 `Character("Name")` 里的名字，这个缺口由它补。
-- `checks/lint_rpy.py`（格式错误码 E001–E005，不需 SDK）与 `checks/lint_report.py`（按文件汇总）是独立小工具、未入 CLI，与 `tl_check` 定位不同、互不取代。
+- `checks/lint_rpy.py`（格式错误码 E001–E012，不需 SDK）与 `checks/lint_report.py`（按文件汇总）是独立小工具、未入 CLI，与 `tl_check` 定位不同、互不取代。
 - **`tl_check` 的两条可选维度**（默认关闭，**不参与 `all`**，规则取自 AiNiee 的 TranslationChecker）：`--glossary <术语表>` 核对原文命中词条时译文有没有用上定稿译名（`.xlsx` 三栏 / `.jsonl` / `.json` 都吃，xlsx 用标准库 zipfile 读，不依赖 openpyxl）；`--lang-ratio <阈值>` 按 20 行分块统计目标语言占比，低于阈值报语言不匹配（启发式，只对 schinese/tchinese/japanese/korean/english 生效）。详见 [../references/tl_check.md](../references/tl_check.md)。
 
 ### translate/ — 写入与修补（想"修掉问题"来这）
@@ -186,24 +188,24 @@ v6 严格模式**不做滑动窗口猜测**（v5 误报率 ~70%）：变体只�
 
 ### linear/ — 剧情线性模式
 
-按顺序自动串剧情，跳过沙盒地图导航。`analyze` 检测是否内置线性机制 → `add` 生成 `game/zzz_linear_mode.rpy` 补丁（**不改原脚本，删文件即还原**）/ `modify` 校验自带事件表并用 `--append-new` 追加遗漏。边界：场景列表由"对话密度 + 桩标签过滤"推导，`--min-says` 调阈值、`--include/--exclude` 手工增删；跨场景变量用补丁里的 Variable Helper 手动补。只有 `.rpyc` 时先跑 `scripts/unrpyc.py`。
+按顺序自动串剧情，跳过沙盒地图导航。**半自动范式：选项与分支保留（剧情内 menu 玩家自选）、沙盒机制跳过（导航标签）**。`analyze` 检测是否内置线性机制 → `add` 生成 `game/zzz_linear_mode.rpy` 补丁（**不改原脚本，删文件即还原**）/ `modify` 校验自带事件表并用 `--append-new` 追加遗漏。补丁含 `LM_GATES` 好感/天数补偿表（进入门控事件前自动补，解决跳过日常导致的状态冻结）、`lm_done` 进度标记（目录标灰已播、可续播）、`LM_DAY_MOD` 星期循环长度常量。边界：场景列表由"对话密度 + 桩标签过滤"推导，`--min-says` 调阈值、`--include/--exclude` 手工增删；**表外剧情性标签（如 actualintro）必须手工纳入 LM_STORY**，否则会被误当导航跳过；`LM_GATES`/`LM_DAY_MOD` 按游戏调度链手动校准。只有 `.rpyc` 时先跑 `scripts/unrpyc.py`。
 
 ### setup/ — 写入类工具（无自动化测试）
 
 安全网是「默认试运行 + `--apply` 落盘 + 首次 `.bak`」。改完任一写入类工具，在样例游戏上跑三连：**试运行**（核对改动清单）→ **落盘**（确认 `.bak` 生成）→ **回滚**（`Copy-Item <文件>.bak <文件> -Force`，再跑试运行确认行为一致）。
 
 ```bash
-python setup_i18n.py <game>                              # 初始化多语言（建 game/tl/）
-python add_fonts.py <game> --font path/to/font.ttf       # 添加字体
-python switch_default_language.py <game> --lang schinese # 切换默认语言
-python fix_lang_button.py <game> --apply                 # 修语言按钮写死（先试运行）
+python setup_i18n.py --path <game> --lang schinese        # 初始化多语言（建 game/tl/）
+python add_fonts.py <game> path/to/font.ttf               # 添加字体（位置参数 fonts，可多个）
+python switch_default_language.py <game> schinese         # 切换默认语言（位置参数 language）
+python fix_lang_button.py <game> --apply                  # 修语言按钮写死（先试运行）
 ```
 
 ## 典型工作流
 
 ```
 1. python setup/setup_i18n.py ...                    → 初始化多语言（建 game/tl/）
-2. python renpy-tools-cli.py all <项目> -l schinese → 一键检测（18 项）
+2. python renpy-tools-cli.py all <项目> -l schinese → 一键检测（19 项）
 3. python renpy-tools-cli.py integrity <项目>      → 变量/角色/标签结构与转义
 4. python renpy-tools-cli.py untranslated <tl目录> --csv → 缺句清单
 5. python names/unify_name_translations.py ...    → 统一角色名翻译
@@ -226,19 +228,20 @@ python fix_lang_button.py <game> --apply                 # 修语言按钮写死
 
 ```bash
 cd tests
-python -m unittest discover -v          # 全部（当前 597 用例，约 60s）
-python -m unittest test_renpy_tools -v  # 解析/回填安全/CLI 批次（176）
+python -m unittest discover -v          # 全部（当前 614 用例，约 60s）
+python -m unittest test_renpy_tools -v  # 解析/回填安全/CLI 批次（179 用例）
 python -m unittest test_crash_risks -v  # 崩溃检测器误报边界（23）
 python -m unittest test_say_parse_contract -v  # say 解析契约（9）
 python -m unittest test_config_loaders -v # 外置 JSON 配置加载器（13）
-python -m unittest test_cli_surface -v  # CLI 门面：35 子命令 --help 全通（7）
+python -m unittest test_cli_surface -v  # CLI 门面：36 子命令 --help 全通（7）
 python -m unittest test_fonts_i18n -v   # 字体/多语言链路测试 + rpa_index（31 用例）
 python -m unittest test_urm_install -v  # URM 门界/回滚/不越权（29 用例）
 python -m unittest test_checks_zoo -v   # checks/ 零覆盖检查器契约 + 转义回归（37 用例）
 python -m unittest test_screen_quality -v # 硬性质校筛行：残留/假名/标点/相似度（24 用例）
+python -m unittest test_fmtlint -v # tl 格式层 lint：BOM/排版级/E009 误报边界 + 引号奇偶 E012 + 契约（22 用例）
 python -m unittest test_tl_check_crash -v # tl 崩溃级规则 + 术语一致性/语言分块判定（27 用例）
-python -m unittest test_polish_batches -v # 润色切批 + 剧本提示词与 Tier 分层 + merge 结构守恒门（47 用例）
-python -m unittest test_repo_consistency -v # 文档 ↔ 代码自洽 + 全库数字声明（12 用例）
+python -m unittest test_polish_batches -v # 润色切批 + 剧本提示词与 Tier 分层 + merge 结构守恒门（50 用例）
+python -m unittest test_repo_consistency -v # 文档 ↔ 代码自洽 + 全库数字声明（13 用例）
 python -m unittest test_count -v        # 用例总数自证（2 用例）
 ```
 
@@ -246,9 +249,9 @@ python -m unittest test_count -v        # 用例总数自证（2 用例）
 
 ## 覆盖范围与盲区
 
-**有测试**：公共解析层（`shared/rpy_syntax.py`、`shared/backup.py`）、`tl_check`、`autotranslate` 回填安全、`check_untranslated`、`check_translation_integrity`、`unify_name_translations`、`fix_missing_tags`、`sync_namebox_translation`、`check_crash_risks`（误报边界双向断言）、CLI 参数透传与 `all` 批次/tl_dir 换算、门面 35 子命令 `--help` 契约、`check_fonts` / `check_i18n` / `rpa_index`、外置 JSON 配置加载器、`urm_install` 的引擎与 .rpa 闸门 / 回滚幂等 / 不越权删除、`checks/` 中 `check_type_safety` / `check_duplicate_translations` / `check_func_text` / `check_ui_text` / `check_translation_misuse` / `check_auto_trans` / `check_button_missing_translation`。
+**有测试**：公共解析层（`shared/rpy_syntax.py`、`shared/backup.py`）、`tl_check`、`autotranslate` 回填安全、`check_untranslated`、`check_translation_integrity`、`unify_name_translations`、`fix_missing_tags`、`sync_namebox_translation`、`check_crash_risks`（误报边界双向断言）、CLI 参数透传与 `all` 批次/tl_dir 换算、门面 36 子命令 `--help` 契约、`check_fonts` / `check_i18n` / `rpa_index`、外置 JSON 配置加载器、`urm_install` 的引擎与 .rpa 闸门 / 回滚幂等 / 不越权删除、`checks/` 中 `check_type_safety` / `check_duplicate_translations` / `check_func_text` / `check_ui_text` / `check_translation_misuse` / `check_auto_trans` / `check_button_missing_translation`。
 
-**零测试**（使用时留意）：`sdk/` 下 `analyze` / `check_assets` / `setup_i18n` / `setup_fonts`、`setup/` 下 6 个写入类工具、`checks/` 下 `check_label_issues`（613 行）与 `lint_check`、`linear_mode.py`（975 行）。
+**零测试**（使用时留意）：`sdk/` 下 `analyze` / `check_assets` / `setup_i18n` / `setup_fonts`、`setup/` 下 6 个写入类工具、`checks/` 下 `check_label_issues`（635 行）与 `lint_check`、`linear_mode.py`（1052 行）。
 
 `optimize_assets.py` 曾是真 bug 源（`.m4a` 未处理导致 `TypeError`、GBK 控制台 emoji `UnicodeEncodeError`、把全量降级说成「优化完成」）。已修但仍无自动化测试——它依赖外部二进制（pngquant/jpegoptim/ffmpeg），没有这些工具的机器上只会走降级路径，测不出压缩逻辑本身。
 

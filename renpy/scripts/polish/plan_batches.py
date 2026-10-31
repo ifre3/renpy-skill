@@ -16,9 +16,11 @@ polish_state.json 维护批次状态」，但没有任何脚本产出它们—�
 ## 三条硬约束（写进工具本身，不靠人自觉）
 
 1. **场景段不被劈开**：以 `translate <lang> <label>_<hash>:` 的 label 为边界，
-   按 ~200 条上限合并**相邻**场景。实测：连续同场景段共 3,637 个，最长 223 条、
-   中位数仅 1 条——所以「每场景一批」会切出数千批，比不切还糟。只有单场景超过
-   上限才按条切，并标 ``split: true`` 让下一批从同一场景续。
+   按 ~150 条上限合并**相邻**场景（默认 150；100/150/200/300 四档实测对比见
+   references/translation_polish.md「批次大小实测」：200 偏大、150 平衡、100 质量优先）。
+   实测：连续同场景段共 3,637 个，最长 223 条、中位数仅 1 条——所以「每场景一批」
+   会切出数千批，比不切还糟。只有单场景超过上限才按条切，并标 ``split: true``
+   让下一批从同一场景续。
 2. **已 consumed 的批次不再产出**：落实「润色只做一轮，越润越差」的实测结论。
    重跑同一命令，已完成的批次不会被重新生成。
 3. **不碰写入通道**：本脚本只产出批次 JSON / 提示词 / 账本；回填仍走
@@ -59,7 +61,7 @@ else:  # pragma: no cover
 #: `translate schinese foo_1234abcd:` —— 去掉末尾 8 位哈希得到场景名。
 LABEL_RE = re.compile(r"^translate\s+\w+\s+([A-Za-z_][\w]*?)(?:_([0-9a-f]{8}))?\s*:\s*$")
 
-DEFAULT_BATCH_SIZE = 200
+DEFAULT_BATCH_SIZE = 150
 
 #: 提示词里必须写死的禁改清单。来源：translation_polish.md 策略一步骤 3 +
 #: polish/README.md 实测注意（裸 % 在 safe_text=False 下直接崩溃）。
@@ -303,7 +305,7 @@ def find_glossary(project_root):
 
 
 def render_prompt(batch_no, items, scenes, split, chars, prev_terms,
-                  glossary_hint):
+                  glossary_hint, context_hint=None):
     """生成一批的提示词：AI 拿到就能直接开工，不用再去翻流程文档。
 
     2026-10-18 从"机翻矫正表"改为"连续剧本审稿"。旧版把每行渲染成
@@ -311,6 +313,13 @@ def render_prompt(batch_no, items, scenes, split, chars, prev_terms,
     "去翻译腔/改口语/修正语法"三件事——等于鼓励逐行找茬，违背本项目自己的
     实测结论"润色只做一轮、越润越差"。新版按场景连成剧本块、不截断长句、
     并明确允许"不改"。
+
+    2026-10-27 升级为**母语流畅档**（translation_polish.md 策略一，新默认）：
+    标准 = 简体中文母语者读着流畅，无文学性要求；读着不像母语者写的才改，
+    且允许更主动的重写（语序重组/增删连接词/拆分长句）；只做一轮。
+    若传入 ``context_hint``（<项目根>/.cache/polish/context.md 的路径），
+    prompt 会指示先读其中的章节核心再通读剧本。低扰动审校档（策略一B）未单独
+    设模板：需要时把本函数"标准"段手改为"大部分保持原样"即可。
     """
     lines = []
     lines.append(f"# 审稿批次 {batch_no:03d}（{len(items)} 条）\n")
@@ -321,14 +330,22 @@ def render_prompt(batch_no, items, scenes, split, chars, prev_terms,
         lines.append("⚠️ 本批是某场景被切开的一部分：与相邻批属同一场景，"
                      "术语与角色语气必须保持一致。")
     lines.append("")
+    if context_hint:
+        lines.append("## 全局上下文")
+        lines.append(f"先读 `{context_hint}` 的「章节核心」（每章 2-4 条：主线/情节/"
+                     "人物/专名/语气），用它把握全篇口吻与专名，再读本批剧本；")
+        lines.append("未出现的章节不要据此增删内容。\n")
     lines.append("## 你的角色")
-    lines.append("你是这段剧本的**中文审稿人**。下面按场景给出连续对白，请像读稿一样通读，"
-                 "判断译文是否**读起来顺**。")
+    lines.append("你是这段剧本的**中文母语审稿人**。目标是让译文读起来像"
+                 "**简体中文母语者写的**——流畅、自然、没有翻译腔。下面按场景给出"
+                 "连续对白，请像读稿一样通读，判断哪里读着不像母语者写的。")
     lines.append("")
-    lines.append("**核心原则：大部分句子是好的，保持原样。**")
-    lines.append("只有当某句确实读着别扭（语序生硬、词不达意、语气与角色不符、"
-                 "和前后句衔接不上）时才改；拿不准就不改。")
-    lines.append("逐句找茬式改写会让通顺的句子变差——这是润色的头号副作用。")
+    lines.append("**标准：读着别扭、不像母语者写的才改。**")
+    lines.append("- 不顺（语序生硬、词不达意、冗余、语气与角色不符、和前后句不连贯）"
+                 "→ 主动改：语序重组、增删连接词、拆分过长的句子都可以。")
+    lines.append("- 已经顺、像母语者写的 → **保持原样**，不要为了文采去动它。")
+    lines.append("- 逐句找茬式改写会让通顺的句子变差——这是润色的头号副作用。")
+    lines.append("- **只做一轮**：通读完全批后一次性输出，不要反复推敲旧译文。")
     lines.append("禁止增删剧情信息（不要加原文没有的细节，也不要丢原文有的）。\n")
     lines.append("## 怎么读这批")
     lines.append("每条只给**译文**——语病、语序、冗余、语气这类问题，读中文就能判断。")
@@ -487,6 +504,18 @@ def main():
 
     written = 0
     idx = len(kept)
+
+    # ── 全局上下文（母语流畅档）：<项目根>/.cache/polish/context.md 存在则带进
+    # prompt，让 AI 先读章节核心（主线/情节/人物/专名/语气）再通读本批剧本。
+    context_hint = None
+    for cand in (out / "context.md",
+                 Path(args.out).parent.parent / "context.md"):
+        if cand.is_file():
+            context_hint = str(cand)
+            break
+    if context_hint:
+        print(f"全局上下文: {context_hint}")
+
     for items, scenes, split in batches:
         first = items[0]
         key = (first.get("file"), first.get("line"))
@@ -509,7 +538,7 @@ def main():
         files = sorted({e["file"] for e in items})
         (out / f"{stem}.prompt.md").write_text(
             render_prompt(no, items, scenes, split, chars, prev_terms,
-                          glossary_hint),
+                          glossary_hint, context_hint),
             encoding="utf-8")
 
         state.setdefault("batches", []).append({

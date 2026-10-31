@@ -5,11 +5,11 @@
 
 ## 通用度分级
 
-分级覆盖 `scripts/` 下全部 47 个非测试模块（2026-10-05 补齐，原先漏登 8 个）。
+`scripts/` 下共 60 个非测试模块（2026-10-25 复核）；下面分级列出主要条目，未列入的为 `shared/` 基础设施（`base_checker`/`namebox`/`rpa_index`/`tool_registry`）与 `sdk/cli.py` 门面、`checks/tag_repair`、`checks/check_typography` 等检查器辅助。
 
-- 【通用 24】`renpy-tools-cli` `tl_check` `check_charname_translation` `check_translation_integrity` `check_untranslated` `fix_translation_comments` `patch_renpy_say`(机制) `add_performance_panel` `patch_android_tablet` `remove_translated` `setup_i18n` `unrpyc` `check_auto_trans` `check_crash_risks` `check_duplicate_translations` `check_label_issues` `check_translation_misuse` `check_type_safety` `check_ui_text` `lint_check` `make_glossary` `analyze` `check_assets` `sdk_common` —— 直接用。
+- 【通用 24】`renpy-tools-cli` `tl_check` `check_charname_translation` `check_translation_integrity` `check_untranslated` `check_tl_coverage`(2026-10-25 新增：源↔tl 文件覆盖对照，untranslated 只扫 tl 内部、看不见源脚本没译文文件的缺口) `fix_translation_comments` `patch_renpy_say`(机制) `add_performance_panel` `patch_android_tablet` `remove_translated` `setup_i18n` `unrpyc` `check_auto_trans` `check_crash_risks` `check_duplicate_translations` `check_label_issues` `check_translation_misuse` `check_type_safety` `check_ui_text` `lint_check` `make_glossary` `analyze` `check_assets` `sdk_common` —— 直接用。
 - 【半通用 13】`linear_mode` `unify_name_translations` `autotranslate` `sync_namebox_translation` `add_fonts` `switch_default_language` `fix_lang_button` `check_func_text` `check_button_missing_translation` `lint_report` `lint_rpy` `optimize_assets` `urm_install`
-- 【专用 3】`fix_missing_tags` `setup_fonts` `extract_say`+`merge_polish`+`screen_suspicious`（润色组三件套，作为管线整体使用）
+- 【专用 8】`fix_missing_tags` `setup_fonts` `extract_say`+`merge_polish`+`screen_suspicious`（润色组三件套，作为管线整体使用）`direct_polish`（无 API 规则层机翻矫正）`screen_quality`（硬性质筛行，配合 screen_suspicious）`plan_batches`（润色切批+剧本提示词）`check_payload`（引流/汉化载荷只读检测）
 - 【基础设施】`shared/backup.py`(幂等 .bak+原子写, fail-closed) `shared/rpy_syntax.py` `checks/common.py` `polish/_say_parse.py`(rpy_syntax 适配器)
 
 ### 新补登条目的边界
@@ -23,15 +23,15 @@
 | `urm_install.py` | URM 安装/卸载/体检。**不下载**（第三方 URL 会漂移，代用户下是替它决定往游戏目录放可执行代码）；安装前门界：引擎 ≥6.99.14 + 非加密 .rpa（不满足直接拒绝）；卸载靠 `.urm_installed.json` 签名精确回滚，**绝不删未签名的文件**（用户手工放的 .rpy 会保留并提示）；URM 是 `.rpa` 而非 `.rpy`，别按 .rpy 方式处理 | 用户自行下载后 `--rpa <路径> --apply`；装上后游戏内按空格验证（quickmenu 齿轮图标）；**解不了画廊**（判据走 `_seen_ever`），开画廊用 unlock_patches.md |
 | `setup_fonts.py` | 生成的配置要跟 `add_fonts.py` 的注入路径配套，两套并存易打架 | 新项目走 `setup_i18n.py --font-mode`，老项目已注入字体就别再跑 detect/config |
 | `polish/` 三件套 | `extract_say` / `merge_polish` / `screen_suspicious` 是一条管线的三段，单跑任一段无意义；`screen_suspicious` 的 RULES 只覆盖常见翻译腔 | 整条跑；RULES 按项目文风增删 |
-| `linear_mode.py` | 975 行，三种模式（见下表），`modify` 只认 `get_event_list` + `Event(id=)` 事件表 | 先 `analyze` 再选方式 |
+| `linear_mode.py` | 1003 行，三种模式（见下表），`modify` 只认 `get_event_list` + `Event(id=)` 事件表 | 先 `analyze` 再选方式 |
 
 ## 半通用条目的保守经验
 
 | 工具 | 边界 | 保守做法 |
 |------|------|----------|
-| `linear_mode.py`（975 行，三种模式）| **剧本门控（经验做法，未内置脚本）**：把路由标签 if/jump 链简化成「totaldays 达标 && 本天未播」写回剧本（FriendshipClub 式节点门控，需授权改原文件；条件简化会丢弃前置 flag → 剧情连续性可能有小跳跃）。**悬浮补丁（linear_mode.py add）**：单开关 + 回调顶层重定向；菜单仍需手点、repeatable 长对话场景不跳。**modify 专用**：只认 `get_event_list` + `Event(id=)` 事件表（LostInYou 自有机制）。add 的场景推导含 LostInYou 式桩标签与 `script.rpy` 命名假设（`--min-says/--include/--exclude/--list` 校正） | 先 `analyze` 再选方式；路由链集中在单标签 → 用剧本门控（自行改写剧本，不要找现成脚本）；不想改原文件 → 悬浮补丁；有事件表 → modify |
+| `linear_mode.py`（1003 行，三种模式）| **剧本门控（经验做法，未内置脚本）**：把路由标签 if/jump 链简化成「totaldays 达标 && 本天未播」写回剧本（FriendshipClub 式节点门控，需授权改原文件；条件简化会丢弃前置 flag → 剧情连续性可能有小跳跃）。**悬浮补丁（linear_mode.py add）**：单开关 + 回调顶层重定向；菜单仍需手点、repeatable 长对话场景不跳。**modify 专用**：只认 `get_event_list` + `Event(id=)` 事件表（LostInYou 自有机制）。add 的场景推导含 LostInYou 式桩标签与 `script.rpy` 命名假设（`--min-says/--include/--exclude/--list` 校正） | 先 `analyze` 再选方式；路由链集中在单标签 → 用剧本门控（自行改写剧本，不要找现成脚本）；不想改原文件 → 悬浮补丁；有事件表 → modify |
 | `unify_name_translations.py` (v6) | 核心通用（不猜测变体，全靠外部 glossary）；残留 SKIP_FILES 四个文件名、`DEFAULT_TL_DIR=game/tl/schinese`。旧版 `unify_names_v2.py` 已移除 | 换游戏传 `--tl-dir`；SKIP_FILES 残留无害但注意。术语表草稿先用 `names/make_glossary.py` 生成 |
-| `make_glossary.py` | v3 只做确定性取证：Character 定义人名 → 草稿 JSON；strings 配对/碰撞/出现次数 → 证据 JSONL 与报告。**术语资格不脚本判定**，AI 略读流程见 translation_workflow.md「术语表精读」。判据学自 LinguaGacha glossary 技能（身份=资格，频率只是证据） | 草稿直接喂 `unify_name_translations.py` / `unify_names.py`；AI 判定后的定稿才合并进正式术语表 |
+| `make_glossary.py` | v3 只做确定性取证：Character 定义人名 → 草稿 JSON；strings 配对/碰撞/出现次数 → 证据 JSONL 与报告。**术语资格不脚本判定**，AI 略读流程见 translation_workflow.md「术语表精读」。判据学自 LinguaGacha glossary 技能（身份=资格，频率只是证据） | 草稿直接喂 `names/apply_glossary_body.py`（快速批改）；需逐条审核/中文变体/回滚走 `unify_name_translations.py`；AI 判定后的定稿才合并进正式术语表 |
 | `autotranslate.py` | DEFAULT_CONFIG 不内置端点（`--api-url` 或环境变量 `RENPY_TRANSLATE_API_URL` 提供 OpenAI 兼容端点），`target_language="Simplified Chinese"` 默认简中，提示词是 Galgame 中文化专用 | 换语言对先改 DEFAULT_CONFIG；端点与密钥都走环境变量（`RENPY_TRANSLATE_API_URL` / `RENPY_TRANSLATE_API_KEY`） |
 | `sync_namebox_translation.py` | 默认目标 `script_translated.rpy`、术语表 `导出_术语表.xlsx` 是自家命名约定 | 永远先看试运行输出（默认不写，`--apply` 才落盘） |
 | `add_fonts.py` | 只认 setup_i18n 生成的 `fonts_common.rpy` 与 4 个自家 define 变量名 | 先跑 `setup_i18n.py`，否则拒绝写入是预期行为 |

@@ -17,3 +17,6 @@ tmp/
 
 # 游戏侧过程产物：payloadscan --out 的落点，点号前缀隐藏、与 game/ 同级。
 .renpy-skill-tmp/
+
+# 会话附件缓存：宿主工具的会话图片/文件暂存。不进 git。
+.loomy-attachments/

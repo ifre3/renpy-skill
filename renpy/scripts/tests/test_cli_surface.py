@@ -22,7 +22,7 @@ ALL_SUBCOMMANDS = [
     "fontcheck", "langcheck", "tlcheck", "fmtlint", "polish",
     "linear", "fixtags", "fixcomments", "patchsay", "i18n", "lang", "fonts",
     "langbtn", "perfpanel", "rmsuffix", "urm", "unrpyc", "tablet", "optimize",
-    "typography", "payloadscan",
+    "typography", "payloadscan", "tlcoverage",
 ]
 
 
@@ -42,7 +42,7 @@ class TestCliSurface(unittest.TestCase):
         cli = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cli)
         self.assertEqual(sorted(cli.TOOL_SCRIPTS), sorted(ALL_SUBCOMMANDS))
-        self.assertEqual(len(ALL_SUBCOMMANDS), 35)
+        self.assertEqual(len(ALL_SUBCOMMANDS), 36)
 
     def test_list_succeeds(self):
         r = _run(["list"])

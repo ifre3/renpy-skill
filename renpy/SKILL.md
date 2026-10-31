@@ -21,24 +21,27 @@ metadata:
 | 你说 | 它做 |
 |------|------|
 | 检查代码有没有问题 | `cli.lint` 语法检查 |
-| 项目体检 / 闪退 / 缺句 / 名字是英文 | `renpy-tools-cli.py all <项目> -l schinese`（18 项只读检查，退出码 1 = 查出问题而非崩溃）。详解见 [scripts/README.md](scripts/README.md) |
+| 项目体检 / 闪退 / 缺句 / 名字是英文 | `renpy-tools-cli.py all <项目> -l schinese`（19 项只读检查，退出码 1 = 查出问题而非崩溃）。详解见 [scripts/README.md](scripts/README.md) |
 | 多语言链路 / 语言切换通不通 | `langcheck`（check_i18n 只读测试） |
 | 字体接没接对 / 切语言会不会方块 | `fontcheck`（check_fonts 只读测试） |
 | tl 翻译文件质检 / 译文插入变量导致崩溃 | `tlcheck`（`checks/tl_check.py`，三级报告 + `--fix`；**分级细则唯一完整出处** = [references/tl_check.md](references/tl_check.md)） |
 | 打包 Windows / APK / Web | `scripts/sdk/cli.py` 的 Python 方法（`distribute` / `android_build` / `web_build`）——**不是** `renpy-tools-cli.py` 子命令 |
 | 分析项目结构 / 有多少 label | `renpy-tools-cli.py linear analyze`（`analyze` 是 `linear` 的二级子命令，不是顶层子命令） |
+| 给沙盒游戏加线性模式 / 自动串剧情 | `renpy-tools-cli.py linear add <游戏>`（生成 `game/zzz_linear_mode.rpy` 补丁，不改原脚本、删除即还原）；架构范式与社区避坑见 [references/sandbox_linear_design.md](references/sandbox_linear_design.md) |
 | 添加中文翻译 / 导出翻译 | `scripts/sdk/cli.py` 的 Python 方法（`translate` / `extract_strings` / `merge_strings`）——**不是** `renpy-tools-cli.py` 子命令 |
 | 写剧情 / 加画廊 / 养成数值 / 设置项 | AI 直接写 .rpy；陷阱见 [references/snippets.md](references/snippets.md)，画廊/数值见 [references/gallery_and_stats.md](references/gallery_and_stats.md) |
 | 从零做一个游戏 | [references/game_creation_workflow.md](references/game_creation_workflow.md)（立项确认 → 骨架 → 剧本落盘 → 占位资产 → 逐章验证 → 打包；美术由用户出，skill 只管占位与接入） |
 | 解包 / 反编译 / 改存档 / 一键解锁 CG | [references/player_tools.md](references/player_tools.md)、[references/unlock_patches.md](references/unlock_patches.md) |
 | 想改数值 / 看隐藏选项 / 重放剧情 | URM（投放式不碰原文件，需引擎 ≥6.99.14）→ player_tools.md。**URM 解不了画廊**（判据是 `_seen_ever` 而非 `_seen_images`），开画廊用 unlock_patches.md |
-| 名字栏显示英文 / 名字没汉化 | 先跑 `checks/check_charname_translation.py`（含裸 define + 内联说话人），缺译名的补进术语表，再 `sync_namebox_translation.py --stub game/tl/<lang>/zz_namebox.rpy --apply`；**带 `{color=}` 标签的名字必须整串匹配**，详见 [references/namebox_translation.md](references/namebox_translation.md) |
-| 汉化这个游戏 | [references/translation_workflow.md](references/translation_workflow.md)（**术语表定稿前必须停下征求用户**；`make_glossary.py` 默认落游戏根目录 `术语表.xlsx`，AiNiee 三栏 原文\|译文\|备注，AI 定稿后 `--finalize` 出完整版） |
-| 翻译腔太重 / 想润色 | 润色管线（**审稿**，不是机翻矫正）：`extract_say.py` → `screen_suspicious.py` + `screen_quality.py` 零 token 筛行 → [`direct_polish.py` 无 API 规则层矫正（机翻味/标点）] → `plan_batches.py` 按场景切批并生成**连续剧本块**提示词（不截断长句、明确允许「大部分不改」）→ AI 审稿只输出改动行 → `merge_polish.py`（结构守恒门 + 剔除未改动行）→ `autotranslate.py apply --overwrite`。**润色只做一轮**（越润越差），账本防重润；见 [references/translation_polish.md](references/translation_polish.md) |
+| 自动攻略 / 看选项后果 / 给游戏生成攻略 mod | 本机留档 `cache/`：**Universal Ren'Py Walkthrough**（BCassO，投放 `__urw/` 进游戏 `game/`，Alt+W 面板显示选项后果与跳转）· **RenPy-WTForge**（huchukato，GUI 扫 rpa/rpyc 生成带颜色标记的 `wtmod.rpy`）。⚠️ 与 player_tools.md 的 URM（Universal Ren'Py **Mod**，0x52.dev）**不是同一工具** |
+| 名字栏显示英文 / 名字没汉化 | 先跑 `checks/check_charname_translation.py`（含裸 define + 内联说话人），缺译名的补进术语表，再 `sync_namebox_translation.py --project <game> --stub game/tl/<lang>/zz_namebox.rpy --apply`；**带 `{color=}` 标签的名字必须整串匹配**，详见 [references/namebox_translation.md](references/namebox_translation.md) |
+| 汉化这个游戏 | [references/translation_workflow.md](references/translation_workflow.md)（**术语表定稿前必须停下征求用户**；`make_glossary.py` 默认落游戏根目录 `术语表.xlsx`，AiNiee 三栏 原文\|译文\|备注，AI 定稿后 `--finalize` 出完整版）。收尾必须跑 `tlcoverage`：`untranslated`/`all` 全绿 ≠ 玩家看到的都是中文——源脚本根本没有译文文件时，那两类检查看不见（AfterDark 实测 55/124 漏覆盖） |
+| 翻译腔太重 / 想润色 | 先分清：**校对**（策略零 `direct_polish.py` 机械硬伤，0 token，非润色）→ **润色**。默认档 = **母语流畅档**（策略一：标准 = 目标语言母语者读得流畅、无文学性要求；流程 = 校对前置 → **略读全文 + 罗列章节核心**进 `.cache/polish/context.md` → `plan_batches.py` 连续剧本块 → AI 按「读着别扭/不像母语者就改、通顺保持原样」只输出改动行 → `merge_polish.py` 结构守恒门 → `apply --overwrite`）；保守可切**策略一B**（低扰动审稿：大部分不改）。**只做一轮**（越润越差），账本防重润；见 [references/translation_polish.md](references/translation_polish.md) |
 | 没有 tl 目录却是中文 / 弹窗推网站 / 想拆引流 | `renpy-tools-cli.py payloadscan <项目>`（只读，列出载荷形态 + 引流/汉化证据行号）。**拆除前必读** [references/replace_text_hook.md](references/replace_text_hook.md) 第 4 节：二者同 blob 时**只删引流**（`overlay_screens`/`define_screen`/联网），**必须保留** `config.replace_text` 及其依赖（词表加载、匹配函数、`_b_*` 内建别名） |
 | 中文显示不出来 / 切不到中文 | 按序：① `langbtn --apply` 修语言按钮写死 ② `lang` 设默认语言 ③ `fonts` 注入字体 ④ 仍无切换入口则 `setup_i18n` 生成。勿重复造轮子 |
 | 崩溃 / traceback | 没有脚本——直接给 AI 判读，比正则准；系统性排查见 [references/debugging.md](references/debugging.md) |
 | 旧引擎发行版（≥8.0 lint 不可信） | 用**游戏自带解释器**就地验证：`cd <游戏根> && ./lib/windows-x86_64/python.exe <启动>.py . lint`；跑 `test` 必须加 `SDL_VIDEODRIVER=windows`。版本坑见 [references/renpy_gotchas.md](references/renpy_gotchas.md) |
+| 继续上次的汉化 / 润色 / 创作（跨会话） | 先读 `<项目根>/.cache/` 状态账本（`translate_state.json` / `polish_state.json` / `creation_state.json`），按续跑仪式从 `next` 继续、`done` 不重做、`decisions` 不重问——账本不存在才是新任务。契约唯一出处：[references/translation_workflow.md](references/translation_workflow.md) 第 0 节 |
 
 ## 分支判据（条件不满足就换路，别照抄上一行）
 
@@ -50,13 +53,14 @@ metadata:
 | 中文显示不出来 | 已有语言切换入口？ | 有 → 只 `langbtn` / `fonts` 补漏 | 无 → ① `langbtn --apply` ② `lang` ③ `fonts` ④ `setup_i18n`，**按序，勿跳步重造** |
 | 崩溃 / traceback | —— | 直接给 AI 判读（比正则准），系统性排查走 [debugging.md](references/debugging.md) | —— |
 
-> **请求模糊时**（拿不准用户在问哪一类）：先跑 `renpy-tools-cli.py all <项目> -l schinese`——18 项全只读，退出码 1 表示**查出问题**而非崩溃；它会自己列明跳过哪些项并提示先补什么。先让它吐依据，比先猜快。
+> **请求模糊时**（拿不准用户在问哪一类）：先跑 `renpy-tools-cli.py all <项目> -l schinese`——19 项全只读，退出码 1 表示**查出问题**而非崩溃；它会自己列明跳过哪些项并提示先补什么。先让它吐依据，比先猜快。
 
 ## 注意事项
 
 | 场景 | 说明 |
 |------|------|
-| **工具回归测试** | 改完 `scripts/` 必跑：`cd scripts/tests && python -m unittest discover`（纯标准库，597 用例）。用例数/目录树/子命令数须与 [scripts/README.md](scripts/README.md) 一致，有测试在守 |
+| **工具回归测试** | 改完 `scripts/` 必跑：`cd scripts/tests && python -m unittest discover`（纯标准库，614 用例）。用例数/目录树/子命令数须与 [scripts/README.md](scripts/README.md) 一致，有测试在守 |
+| **跨会话长流程** | 汉化/润色/创作均按第 0 节账本契约续跑：读账本 → 零 token 复查 → 从 `next` 继续；用户门决定落 `decisions`，同一项目不重问 |
 | **写入类工具安全网** | 首次写入自动 `.bak`（fail-closed，备份失败即停止）+ 原子替换；多数默认试运行，`--apply` 才落盘 |
 | **无 `tl/` 的中文（第三方机翻）** | 显示中文但 `game/tl/` 不存在 → 走 `config.replace_text`；`langcheck` 会点名它并指向 [replace_text_hook.md](references/replace_text_hook.md)，`tl_check` 仍只认 tl 目录 |
 | **跨平台** | `scripts/` 下 9 个分组目录全 ASCII（macOS NFD 归一化会让中文路径 import 失效），darwin 可直接用 |
@@ -68,6 +72,8 @@ metadata:
 
 ## 参考知识（按场景索引）
 
+> 分区轴与命名契约的唯一出处：[references/README.md](references/README.md)。新增参考必须挂进下面分区，否则一致性测试会拦。
+
 **写游戏 / 引擎行为**（AI 直接写 .rpy，不背模板；只收模型记不全、易过时的内容）：
 
 - [renpy_gotchas.md](references/renpy_gotchas.md) — 引擎陷阱（字体静默回退、缩进只数空格、define vs default、SL2 坑）
@@ -76,24 +82,30 @@ metadata:
 - [gallery_and_stats.md](references/gallery_and_stats.md) — 画廊、养成数值、性能预设
 - [advanced_tools.md](references/advanced_tools.md) — 字体修改 4 法 + 语言联动
 - [game_creation_workflow.md](references/game_creation_workflow.md) — 从零创作主线
-- [text2script_workflow.md](references/text2script_workflow.md) — 剧本 → .rpy 规范
+- [text2script_workflow.md](references/text2script_workflow.md) — 剧本 → .rpy 规范（动工前先拆分剧本、逐批与用户确认细节）
+- [sandbox_linear_design.md](references/sandbox_linear_design.md) — 沙盒/线性模式架构范式（双模式设计、线性链模板、事件追踪器、线性化避坑；社区来源见 community_playbook）
 
-**汉化**：
+**汉化**（`translation_*` 家族命名一致）：
 
 - [translation_workflow.md](references/translation_workflow.md) — 翻译工作流（**术语表定稿前必须征求用户**）
-- [hanization_manual.md](references/hanization_manual.md) — 汉化故障手册（现象→原因→修复，10 章）
+- [translation_troubleshooting.md](references/translation_troubleshooting.md) — 汉化故障手册（现象→原因→修复，10 章）
 - [replace_text_hook.md](references/replace_text_hook.md) — `config.replace_text` 载荷识别与**拆除**（唯一完整出处）
 - [translation_polish.md](references/translation_polish.md) — 译文润色策略
-- [tl_check.md](references/tl_check.md) — tl 质检分级细则（唯一完整出处）
+- [tl_check.md](references/tl_check.md) — tl 质检分级细则（唯一完整出处，工具对齐命名）
 - [namebox_translation.md](references/namebox_translation.md) — 名字栏：三类说话人 + **全串精确匹配**
 
-**玩家侧 / 排错 / 工程**：
+**玩家侧 / 解锁**：
 
 - [player_tools.md](references/player_tools.md) — 解包/存档/汉化/重放工具地图
 - [unlock_patches.md](references/unlock_patches.md) — 解锁画廊/CG/回放（补丁全文）
+- `cache/` 留档工具（不入 git、不入分发包，本机可用）：**Universal Ren'Py Walkthrough**（攻略 mod，投放 `__urw/`）+ **RenPy-WTForge**（攻略生成 GUI）——主表有登记，工具细节在 player_tools.md 工具表 |
+
+**排错 / 工程**：
+
 - [debugging.md](references/debugging.md) — 排错指南
 - [sdk_config.md](references/sdk_config.md) — SDK 配置与 CLI 速查
 - [tools_boundaries.md](references/tools_boundaries.md) — 工具通用度分级与写操作风险表
+- [community_playbook.md](references/community_playbook.md) — 社区经验学习台账（渠道清单 / 已验证经验 / 保持不脱节的更新机制）
 
 ---
 

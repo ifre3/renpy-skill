@@ -2,6 +2,45 @@
 
 > 来源：SDK\skills\renpy-translate（已并入本 skill）。用于翻译 `game/tl/<lang>/` 下的翻译脚本 .rpy，保持术语一致 + 地道表达 + 全量审查。
 
+## 0. 长流程状态账本（跨会话续跑契约，唯一出处）
+
+汉化是跨会话/多天的长流程。上下文压缩、会话中断、换人接手后，模型最容易犯的错不是单批质量差，而是**从头重跑已完成的活**。约定：
+
+**账本**：进度落 `<项目根>/.cache/translate_state.json`（润色用已脚本化的 `polish_state.json`，创作用 `creation_state.json`——语义一致，各流程自己落）。AI 维护，纯 JSON，字段：
+
+```json
+{
+  "flow": "translate",
+  "phase": "T2",
+  "done": ["T0 摸底", "T1 术语表（AI 自行定稿）"],
+  "next": "T2 第 7/22 批（.cache/batches/batch_007.md 起未翻）",
+  "decisions": {"route": "① AI 直接翻", "scope": "全量", "glossary": "AI 自行定稿"},
+  "updated": "2026-10-27"
+}
+```
+
+**命名阶段**（进度播报与账本 `phase` 都用这套编号）：
+
+| 阶段 | 内容 | 出口判据 |
+|------|------|----------|
+| T0 | 摸底：版本（`script_version.txt`）/ 规模 / 语言 / 有无已有译文 | 开工确认门问完 |
+| T1 | 术语表：`make_glossary.py` 取证 → AI 精读定稿（**定稿门**） | `glossary.json` 落盘 |
+| T2 | 分批翻译：按 3.1 切批，逐批落盘 | 全部批次翻完 |
+| T3 | 质检修复：`tlcheck` / `integrity` / `fmtlint` / `untranslated` | 退出码 0 |
+| T4 | 润色（可选）：转 [translation_polish.md](translation_polish.md) | 终检 0 异常 |
+| T5 | 收尾：`tlcoverage` + 进游戏抽查主菜单/设置/存读档 | 交付结论 |
+
+**decisions 落账本（半自动的关键）**：T0 开工确认门、T1 定稿门这类**必须问用户**的决策，用户答过一次就写进 `decisions`，后续会话读账本沿用，**不重问**，只在汇报里带一句「沿用上次决定：……」。「必须问」约束的是不静默替用户决定，不是每会话重问一遍。
+
+**续跑仪式**（会话恢复时固定四步）：
+
+1. `.cache/translate_state.json` 存在 → 先读账本，向用户汇报 `phase / done / next`，再动手
+2. 零 token 复查现场与账本是否一致（`renpy-tools-cli.py all` 或对应检查器）；外部改动过文件时**以现场为准**并更新账本
+3. 从 `next` 继续；`done` 里的活不重做
+4. 每完成一个阶段/批次，**先落账本再继续**（账本随批次 JSON 一起放 `.cache/`，理由见 2.5 第 1 步）
+
+账本不存在 = 新任务，走正常流程；不存在"先全项目重扫一遍再说"的续跑方式。
+
 ## 1. 文件校验（必做）
 
 - 文件必须包含 `translate` 关键字（如 `translate schinese ...:` 或 `translate schinese strings:`）
@@ -86,6 +125,24 @@
 - 解包后先看 `game/script_version.txt`，内容即构建该游戏的引擎版本（如 `8.3.7`）。**低于 7.5 的引擎对中文兼容差**（字体回退/编码问题多），评估是否值得接
 - 本地 SDK 跑 lint / 重编译时，**SDK 版本应 ≥ script_version.txt**；旧引擎发行版别用 8.x 专属 API 与 8.0 lint（会漏报 7.x 崩溃，详见 [renpy_gotchas.md](renpy_gotchas.md) 版本兼容条目）
 - 改完译文进游戏不生效 → 先清翻译缓存再排查（`del /s /q game\tl\*.rpyc` + 删 `game/cache`，见 gotchas 翻译缓存条目）
+
+## 5b. 收尾红线：脚本全绿 ≠ 玩家看到的都是中文
+
+`check_untranslated` 只扫 tl 目录**内部**（空译文/new==old），`check_auto_trans` 只对已捕获的字符串交叉核对——**源脚本根本没有译文文件时，两者都看不见**（AfterDark 实测：124 个源脚本只有 70 个 tl 文件，`check_untranslated` 报 OK，玩家照样满屏英文）。收尾必须跑：
+
+```bash
+python renpy-tools-cli.py tlcoverage <项目> -l schinese   # 源脚本↔tl 文件覆盖对照
+```
+
+它利用 Ren'Py 的 tl 文件镜像约定（`game/foo/bar.rpy` → `game/tl/<lang>/foo/bar_translated.rpy`）按路径求差集，不依赖游戏结构，自定义程度高的项目也适用。缺口补法：用 SDK 跑 `renpy.py <项目> translate <lang>` 生成缺失骨架再走管线，或让机翻工具补齐那几个文件。
+
+即使覆盖补满，Ren'Py 的译文骨架仍天然不全——以下几类**任何覆盖检查都看不见**，只能进游戏目验或读代码：
+
+- 运行时构造的文本（init python 里 `Text()`、字符串拼接/插值变量）
+- tl 生成之后才新增/改动的源文本（骨架是生成那天引擎所见的快照）
+- `gui.rpy` 变量与 style 里烤死的字符串（部分进 `translate strings`，部分不进）
+
+所以最终判据是「退出码 0 + 进游戏抽查主菜单/设置/存读档界面」，不要拿单次扫描输出当交付结论。
 
 ## 6. 图片 / 视频 / 字体的语言级资源覆盖
 

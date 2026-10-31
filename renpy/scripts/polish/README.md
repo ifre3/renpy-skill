@@ -49,11 +49,7 @@ extract_say.py ──► entries.json（全量条目+锚点）
 
 ## 零 API 直接润色：`direct_polish.py`
 
-没 API 密钥、或想先零成本洗掉明显机翻味时用它（属机翻矫正层，不含审稿）：
-
-## 零 API 直接润色：`direct_polish.py`
-
-整条管线从 `plan_batches` 到 `merge_polish` 都把“AI 润色”当必需环节。没 API 密钥、或只想先做本地规则清洗再交 AI 润残留时，用 `direct_polish.py`：
+整条管线从 `plan_batches` 到 `merge_polish` 都把“AI 润色”当必需环节。没 API 密钥、或只想先做本地规则清洗再交 AI 润残留时，用 `direct_polish.py`（属机翻矫正层，不含审稿）：
 
 ```
 python polish/direct_polish.py game/tl/schinese -o .cache/polish/direct_fixes.json

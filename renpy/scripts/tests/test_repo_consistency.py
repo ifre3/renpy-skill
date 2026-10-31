@@ -1,7 +1,6 @@
 """仓库自洽性契约：文档说的必须等于代码里有的。
 
-背景：这仓库的文档密度很高（SKILL.md 入口 + 两份 README + 18 个 references +
-CHANGELOG），而「代码改了、文档没改」是这里唯一会反复发生的缺陷类型。已发生过的
+背景：这仓库的文档密度很高（SKILL.md 入口 + 3 份 README + 18 个 references + CHANGELOG），而「代码改了、文档没改」是这里唯一会反复发生的缺陷类型。已发生过的
 实例：
 
 - `README.md:13` 与 `renpy/SKILL.md:68` 写「27 子命令 / 217 用例」，
@@ -145,6 +144,24 @@ def _scan_text(rel, text, truth, per_file):
                 violations.append(
                     f"{rel}:{lineno} [{name}] {detail} 写 {hit}，实际 {want}"
                 )
+
+        # 省略写法：`python -m unittest test_x -v  # 说明（179）`——「用例」二字
+        # 被省掉时上面那条正则扫不到（已发生过 176≠179 的漂移）。仅认「同行有
+        # test 模块名 + 全角括号数字」的形态，避免把无关的（60 个）误当用例数。
+        if not _USE_CASE.search(line):
+            m = re.search(r"(test_\w+)(?:\.py)?\b.*?[（](\d+)\s*[）]", line)
+            if m:
+                name = "单文件用例数"
+                want = per_file.get(m.group(1))
+                coverage[name] = coverage.get(name, 0) + 1
+                if want is None:
+                    violations.append(
+                        f"{rel}:{lineno} [{name}] 提到 {m.group(1)}.py，但没这个测试模块"
+                    )
+                elif int(m.group(2)) != want:
+                    violations.append(
+                        f"{rel}:{lineno} [{name}] {m.group(1)}.py 写 {m.group(2)}，实际 {want}"
+                    )
     return violations, coverage
 
 
@@ -262,20 +279,19 @@ class TestReferentialIntegrity(unittest.TestCase):
     """链接、目录、脚本清单三者互指不缺。"""
 
     def test_markdown_links_resolve(self):
-        """所有 .md 链接必须能落到真实文件。"""
-        bases = (
-            ("README.md", _REPO_ROOT),
-            ("renpy/SKILL.md", _SKILL_ROOT),
-            ("renpy/scripts/README.md", _TOOLS),
-        )
+        """所有 .md 链接必须能落到真实文件。
+
+        全库扫描（除 CHANGELOG 与留档目录）：不只查入口文档——18 个 references
+        与 6 个分组 README 内部的交叉链接曾经不在扫描面里，属盲区。
+        """
         checked = 0
-        for label, base in bases:
-            path = os.path.join(_REPO_ROOT, *label.split("/"))
+        for path in _iter_scanned_md():
+            base = os.path.dirname(path)
             for link in _md_links(_read(path)):
                 target = os.path.normpath(os.path.join(base, link))
                 self.assertTrue(
                     os.path.isfile(target),
-                    f"{label} 里的死链 [{link}]({link}) -> {target}",
+                    f"{_rel(path)} 里的死链 [{link}]({link}) -> {target}",
                 )
                 checked += 1
         self.assertGreater(checked, 0, "一条 .md 链接都没解析到，正则该更新了")
@@ -288,13 +304,15 @@ class TestReferentialIntegrity(unittest.TestCase):
         """
         ref_dir = os.path.join(_SKILL_ROOT, "references")
         on_disk = {
-            f for f in os.listdir(ref_dir) if f.endswith(".md")
+            f for f in os.listdir(ref_dir)
+            if f.endswith(".md") and f != "README.md"   # README.md 是索引本体
         }
         self.assertTrue(on_disk, "references/ 是空的？")
         linked = {
             os.path.basename(l)
             for l in _md_links(_read(_SKILL_MD))
             if l.startswith("references/")
+            and os.path.basename(l) != "README.md"
         }
         self.assertEqual(
             on_disk - linked, set(),
@@ -303,6 +321,22 @@ class TestReferentialIntegrity(unittest.TestCase):
         self.assertEqual(
             linked - on_disk, set(),
             f"SKILL.md 索引了不存在的 references：{sorted(linked - on_disk)}",
+        )
+
+    def test_reference_names_are_ascii_and_regular(self):
+        """references/ 文件名合规：ASCII、小写、仅 [a-z0-9_]（README.md 豁免）。
+
+        命名规则唯一出处：references/README.md。
+        """
+        ref_dir = os.path.join(_SKILL_ROOT, "references")
+        bad = [
+            f for f in os.listdir(ref_dir)
+            if f != "README.md"
+            and not re.fullmatch(r"[a-z0-9_]+\.md", f)
+        ]
+        self.assertEqual(
+            bad, [],
+            f"references 文件名不合命名契约（见 references/README.md）：{bad}",
         )
 
     def test_group_dirs_are_ascii_and_complete(self):
@@ -391,7 +425,11 @@ class TestNoStaleNumbersInProse(unittest.TestCase):
         truth = {
             "subcommands": len(cli.TOOL_SCRIPTS),
             "all_checks": len(cli.ALL_GROUP),
-            "references": len([f for f in os.listdir(ref_dir) if f.endswith(".md")]),
+            # 计数不含 README.md——它是分类契约本体，不是分场景参考
+            "references": len([
+                f for f in os.listdir(ref_dir)
+                if f.endswith(".md") and f != "README.md"
+            ]),
             "cases_total": total,
         }
         violations, coverage = [], {}

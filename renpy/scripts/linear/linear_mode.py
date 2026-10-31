@@ -13,7 +13,10 @@
         * 悬浮按钮: 仅一个 Linear 开关 (自动线性播放)
         * 自动线性播放: 场景结束进入导航标签时自动跳到下一个剧情场景
         * Shift+L 打开场景目录: 手动上一/下一/跳转、变量助手都在目录里
+        * lm_done 进度标记: 已播场景目录标灰删除线, 重进线性可续播
+        * LM_GATES 补偿表: 进入门控事件前自动补齐 totaldays/好感 (按游戏调度链手动填)
       UI 文本为英文（避免部分游戏无中文字体显示方块），注释为中文。
+      设计原则: 半自动线性 — 选项与分支保留 (剧情内 menu 玩家自选), 沙盒机制跳过。
 
   modify <游戏目录> [--csv FILE] [--append-new] [--yes]
       针对已内置线性模式（get_event_list 事件表）的游戏:
@@ -416,6 +419,11 @@ PATCH_TEMPLATE = r"""
 ##   1. 屏幕右上角仅一个悬浮按钮: Linear = 线性模式开关
 ##   2. 开启后场景结束进入导航标签时, 自动跳到下一个剧情场景
 ##   3. Shift+L 打开场景目录: 手动上一/下一/跳转、变量助手 (补设 flag)
+##   4. 已播场景自动标记 (lm_done), 目录里打勾; 重进线性可续播
+##
+## 设计原则: 半自动线性 — 选项与分支保留 (剧情内 menu 玩家自选, 不做自动选),
+##           沙盒机制跳过 (导航标签: 日常/地图/时间推进)。表外剧情性标签
+##           (如 actualintro) 必须纳入 LM_STORY, 否则会被误当导航跳过。
 ##
 ## 说明: 自动播放只重定向"顶层跳转"进入的导航标签; 场景内部 call 的子标签
 ##       不受影响。个别场景依赖未初始化的变量时, 用 Helper 补设后重跳。
@@ -424,6 +432,7 @@ PATCH_TEMPLATE = r"""
 default lm_overlay = True
 default lm_auto = False
 default lm_pos = 0
+default lm_done = set()
 default lm_expr = ""
 
 init -5 python:
@@ -511,6 +520,36 @@ init -5 python:
                 continue
         return None
 
+    # 星期循环长度, 按游戏实际改 (AfterDark: day 0..7 共 8 天; 其他游戏常见 7 天)
+    LM_DAY_MOD = 8
+
+    # 好感/天数门控补偿表: label -> (最小 totaldays, [(角色对象名, 好感属性, 最小好感), ...])
+    # 线性模式跳过日常导航后 totaldays/affection 冻结, 门控事件条件永远不满足;
+    # 进入表内场景前自动补齐累积值 (只补数值, 不补完成 flag — 线性顺序本身保证前置事件先播)。
+    # 例: 'izra_5_event': (10, [('Izra', 'affection', 5)])
+    # 生成器默认空表; 按游戏调度链 (class_scene / 角色 events 标签的 if/elif) 手动补。
+    LM_GATES = {
+    }
+
+    def lm_compensate(lbl):
+        # 进入表内剧情标签前, 补齐该事件已知的 totaldays/好感门控
+        gate = LM_GATES.get(lbl)
+        if not gate:
+            return
+        st = renpy.store
+        min_days, affs = gate
+        if min_days is not None and getattr(st, 'totaldays', 0) < min_days:
+            st.totaldays = min_days
+            # 游戏里 totaldays += 1 与 day += 1 同步; day 按 LM_DAY_MOD 循环
+            st.day = min_days % LM_DAY_MOD
+        for obj_name, attr, minv in affs:
+            obj = getattr(st, obj_name, None)
+            if obj is None:
+                continue
+            cur = getattr(obj, attr, 0)
+            if cur < minv:
+                setattr(obj, attr, minv)
+
     def lm_ff_to_story():
         # 快进到下个剧情天: 逐日推进日历 (等价于游戏 gotoX 的 totaldays+1 / 星期+1),
         # 每天先问路由链要不要触发剧情; 被缺 flag 卡住就停下提示 (Variable Helper 补)
@@ -525,7 +564,8 @@ init -5 python:
                 renpy.notify("FF blocked at %s: set %s" % (blocked[0], ", ".join(blocked[1])))
                 return
             st.totaldays = getattr(st, "totaldays", 1) + 1
-            st.day = (getattr(st, "day", 1) % 7) + 1
+            # day 合法范围 0..LM_DAY_MOD-1; 原 (day%7)+1 在 day=7 时产出 8 (非法, 星期画面卡死)
+            st.day = (getattr(st, "day", 0) + 1) % LM_DAY_MOD
         renpy.notify("FF: no story day within 120 days")
 
     # init 阶段也会触发 label 回调 (例: gui.init() -> call_in_new_context("_style_reset")
@@ -546,6 +586,10 @@ init -5 python:
                 if getattr(st, "lm_pos", None) is None:
                     return
                 st.lm_pos = idx
+                lm_compensate(label)
+                if getattr(st, "lm_done", None) is None:
+                    st.lm_done = set()
+                st.lm_done.add(label)
                 return
             if not getattr(st, "lm_auto", False):
                 return
@@ -610,6 +654,9 @@ init -5 python:
             disp = "%d. %s   (%s)" % (i + 1, lbl, hint)
             if i == renpy.store.lm_pos:
                 disp = "{color=#ffd166}{b}" + disp + "{/b}{/color}"
+            elif getattr(renpy.store, "lm_done", None) and lbl in renpy.store.lm_done:
+                # 已播: 灰色删除线
+                disp = "{color=#7f8fa6}{s}" + disp + "{/s}{/color}"
             rows.append(("s", lbl, disp))
         return rows
 
@@ -802,13 +849,15 @@ def cmd_add(args):
     print("游戏内用法:")
     print("  1. 启动/读档进入游戏, 右上角只有一个悬浮按钮: Linear = 线性模式开关")
     print("  2. 开启 Linear 后, 场景结束会自动跳进下一个剧情场景, 跳过地图/日程导航")
+    print("     (设计原则: 选项与分支保留 — 剧情内 menu 玩家自选; 沙盒机制跳过)")
     print("  3. 跳转后报变量缺失时, 按 Shift+L 打开目录, 用 Variable Helper 补设 flag 再跳")
-    print("  4. Shift+L 随时打开场景目录 (手动上一/下一/跳转)")
+    print("  4. Shift+L 随时打开场景目录 (手动上一/下一/跳转; 灰色删除线 = 已播)")
     if args.router:
         print("  5. 目录里的 FF >> = 快进到下个剧情天: 自动逐日推进日历跳过日常,")
         print("     被前置 flag 卡住时会提示缺哪个变量 (Variable Helper 补后再按)")
     print("-" * 62)
-    print("微调: 直接编辑 %s 里的 LM_STORY 列表 (顺序/增删)" % os.path.basename(out_path))
+    print("微调: 直接编辑 %s 里的 LM_STORY 列表 (顺序/增删), 以及" % os.path.basename(out_path))
+    print("      LM_GATES 补偿表 (好感/天数门控, 见表内注释格式; 按游戏调度链手动补)")
     print("还原: 删除该文件即可, 不改动任何原游戏脚本")
     return 0
 

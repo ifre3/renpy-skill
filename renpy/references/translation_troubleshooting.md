@@ -435,6 +435,18 @@ translate schinese strings:
 
 ---
 
+### 6.6 整个文件没有译文——检查器却报全绿
+
+**现象：** 游戏成片对白/界面仍是英文，`check_untranslated`（甚至 `all`）却一个问题都不报。
+
+**原因：** `check_untranslated` 只扫 tl 目录**内部**有没有空译文；机翻管线（AiNiee 等）只导出了部分文件时，**没有译文文件的源脚本落在所有检查的视野之外**（AfterDark 实测：124 个源脚本只有 70 个 tl 文件，检查报 OK）。这不是脚本坏了，是它天生看不见这类缺口。
+
+**发现：** `check_tl_coverage.py`（CLI `tlcoverage`，入 `all`）——按 Ren'Py 的 tl 文件镜像约定（`foo/bar.rpy` → `tl/<lang>/foo/bar_translated.rpy`）对源侧与 tl 侧求差集。
+
+**修复：** 用 SDK 跑 `renpy.py <项目> translate <lang>` 生成缺失骨架再走翻译管线，或让机翻工具补齐那几个文件。注意补满覆盖后骨架仍不含运行时构造的文本（init python 的 `Text()`、字符串拼接），那部分只能进游戏目验——见 [translation_workflow.md](translation_workflow.md) 5b 节。
+
+---
+
 ## 7. 译名不统一
 
 ### 7.1 同一人名在不同文件中有不同翻译

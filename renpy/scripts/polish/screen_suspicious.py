@@ -3,7 +3,7 @@
 
 用法::
 
-    python screen_suspicious.py <tl目录或entries.json> -o candidates.json [--min-score 3]
+    python screen_suspicious.py <tl目录或entries.json> -o candidates.json [--min-score 2]
 
 规则组（在 RULES 里增删即可）：
   翻译腔高频词、英文残留、长度比异常、new==old 长句疑似漏翻。
@@ -42,6 +42,10 @@ RULES = [
     (r"对此[，。]", "对此直译", 1),
     (r"总而言之", "总而言之", 1),
     (r"[A-Za-z]{4,}", "英文词≥4", 1),
+    # 2026-10-27 增补（实测 fixes_003：Dissonance 汉化的典型机翻残留）
+    (r"^[A-Za-z]{2,}$", "纯单英文词未译", 4),
+    (r"〔[^〕]{1,12}〕", "〔…〕角色标记残留", 3),
+    (r"[hH]{2,}", "拟声 hhh 残留", 2),
 ]
 MIN_LEN_ENG_RESIDUE = 4
 # 英→中译文天然比原文短（实测全库中位数 0.42，19.5% 低于 0.35），把 0.35 当

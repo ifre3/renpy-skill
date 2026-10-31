@@ -141,10 +141,11 @@ class TestCheckerRegistryMetadata(unittest.TestCase):
         self.assertEqual(
             sorted(need),
             sorted(["charname", "integrity", "duplicate", "untranslated",
-                    "tlcheck", "fmtlint"]),
+                    "tlcheck", "fmtlint", "tlcoverage"]),
             "requires_tl 集合变了。button 已从名单移出（实测不依赖 tl 目录，"
             "见 test_button_checker_does_not_require_tl）；fmtlint 于 2026-10-11 "
-            "加入（实测无 tl 目录时输出与有 tl 时不同）。同步本条与 "
+            "加入（实测无 tl 目录时输出与有 tl 时不同）；tlcoverage 于 2026-10-25 "
+            "加入（语义上就是对照 tl 目录，无 tl 时直接报错退出 2）。同步本条与 "
             "test_only_untranslated_takes_tl_dir",
         )
 

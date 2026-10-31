@@ -46,10 +46,10 @@ TOOL_SCRIPTS = {
     "typography": os.path.join("checks", "check_typography.py"),
     "tlcheck": os.path.join("checks", "tl_check.py"),
     "fmtlint": os.path.join("checks", "lint_rpy.py"),
+    # 覆盖对照：untranslated 只扫 tl 内部，看不见「源脚本没有译文文件」的缺口
+    "tlcoverage": os.path.join("checks", "check_tl_coverage.py"),
     # 载荷体检：只为没有 tl 目录的第三方机翻而生（requires_tl=False 是刻意的）。
     "payloadscan": os.path.join("checks", "check_payload.py"),
-    # ── 只读但非检查器（调 SDK lint，自己没实现 CHECKER 契约）──
-    "lint": os.path.join("checks", "lint_check.py"),
     # ── 写入/修补类（非检查器，无契约）──
     "namebox": os.path.join("translate", "sync_namebox_translation.py"),
     "fixtags": os.path.join("translate", "fix_missing_tags.py"),
@@ -107,12 +107,12 @@ TL_GROUP = ["tlcheck", "fmtlint"]
 # 结构性检查：同样只读、同样吃 <项目>，但历史上未纳入 all。
 # 文档（SKILL.md 注意事项 / scripts/README）承诺 all 覆盖「变量完整性 / 标签问题 /
 # 空译文」，故必须在此列出，否则用户按文档跑 all 拿不到报告。
-PAYLOAD_GROUP = ["payloadscan"]
 #: 第三方机翻（`config.replace_text` 载荷）体检。只读、不需要 tl——恰恰相反，
 #: 「**没有** tl 目录」是它最常见的场景，requires_tl=False 是刻意的，所以不并入
 #: STRUCT_GROUP（那组多为缺 tl 时空转或报错，语义相反）。
 PAYLOAD_GROUP = ["payloadscan"]
-STRUCT_GROUP = ["integrity", "label", "type", "duplicate", "button", "typography"]
+STRUCT_GROUP = ["integrity", "label", "type", "duplicate", "button", "typography",
+                "tlcoverage"]
 FIX_GROUP = ["fixtags", "fixcomments", "patchsay", "langbtn"]
 #: 润色编排：只读 tl（回扫场景 label）+ 写 -o 目录的批次/提示词/账本。
 #: 不进 all —— 它需要 --pool/--candidates 等专属参数，all 只透传项目路径。
@@ -128,7 +128,7 @@ DEFAULT_LANG = "schinese"
 CHECKER_NAMES = (
     "ui", "misuse", "func", "auto", "duplicate", "button", "label", "type",
     "integrity", "untranslated", "charname", "crash", "fontcheck", "langcheck",
-    "tlcheck", "fmtlint", "typography", "payloadscan",
+    "tlcheck", "fmtlint", "typography", "payloadscan", "tlcoverage",
 )
 
 _CHECKER_CACHE = {}

@@ -11,34 +11,8 @@
 | 路径 | 职责 |
 |------|------|
 | `renpy/SKILL.md` | 唯一入口：脚本速览、触发关键词、注意事项（含独有引擎版本边界）、references 分场景索引 |
-| `renpy/scripts/` | 顶层仅统一门面 `renpy-tools-cli.py`（35 子命令 + all/list）与 rpyc 反编译兜底 `unrpyc.py`；9 个分组目录全 ASCII（`sdk` `checks` `translate` `polish` `names` `linear` `setup` `shared` `tests`），597 用例回归测试。详见 `renpy/scripts/README.md` |
-| `renpy/references/` | 18 个分场景参考：SDK 配置速查、工具包边界分级、剧本→脚本工作流、从零创作主线、译文润色；gotchas 陷阱库、非显性技巧、中文字号与排版、画廊/养成/性能预设、字体/rpyc/rpa 速查、汉化工作流、`config.replace_text` 钩子（无 tl 机翻的识别与拆除）、名字栏翻译（`{color=}` 标签须全串匹配）、汉化常见问题手册、tl 质检细则、玩家侧工具地图、解锁补丁、排错指南 |
+| `renpy/scripts/` | 顶层仅统一门面 `renpy-tools-cli.py`（36 子命令 + all/list）与 rpyc 反编译兜底 `unrpyc.py`；9 个分组目录全 ASCII（`sdk` `checks` `translate` `polish` `names` `linear` `setup` `shared` `tests`），614 用例回归测试。详见 `renpy/scripts/README.md` |
+| `renpy/references/` | 20 个分场景参考：SDK 配置速查、工具包边界分级、剧本→脚本工作流、从零创作主线、译文润色；gotchas 陷阱库、非显性技巧、中文字号与排版、画廊/养成/性能预设、字体/rpyc/rpa 速查、汉化工作流、`config.replace_text` 钩子（无 tl 机翻的识别与拆除）、名字栏翻译（`{color=}` 标签须全串匹配）、汉化常见问题手册、tl 质检细则、玩家侧工具地图、解锁补丁、排错指南、沙盒/线性模式架构范式（双模式/线性链/事件追踪器）、社区经验学习台账（渠道/已验证经验/更新机制）；分类契约（分区轴/命名规则）见 `references/README.md` |
 | `package.py` | 分发打包（纯标准库）：显式白名单 + 产物结构自检 + 可复现 sha256。**从仓库根跑** `python package.py` / `--check` |
 | `LICENSE` | MIT。`renpy/scripts/README.md` 声称 MIT，仓库就得真有这个文件（由测试盯） |
-| `cache/` | 本机留档区，**不属于技能、不进 git、不进分发包**（已写进 `.gitignore`）：同类开源工具参考包（AiNiee 等）、单次调研数据。这里的东西别当仓库结构看 |
-
-
-- **加载**：向 Agent 显式指定 SKILL.md 路径（`renpy/SKILL.md`）。
-- **SDK 探测**优先级：`--sdk` 参数 → 环境变量 `RENPY_SDK` → 向上查找 → `sdk_common.py` 的 `_KNOWN_SDK_PATHS` → `~/renpy-sdk`。本机路径不写入仓库，本地使用时设 `RENPY_SDK` 环境变量或在 `_KNOWN_SDK_PATHS` 追加。
-- **AI 翻译**：服务端点与密钥均通过环境变量提供（`RENPY_TRANSLATE_API_URL` / `RENPY_TRANSLATE_API_KEY`），仓库不含任何服务地址或凭据。
-- **变更记录**：[CHANGELOG.md](CHANGELOG.md)（评审与修复流水，不在本文展开）。
-
-
-1. 可执行逻辑进 `renpy/scripts/` 或 SDK，技能文档只保留模型不知道的结论。
-2. SKILL.md 的 description 必须覆盖全部故障关键词（崩溃 / traceback、汉化质检、字体方块、存档等）。
-3. 每次项目收尾最多追加 1 条 gotcha（不超过 10 行，附可复制命令），不写教程。
-4. 一个知识只放一处：`.rpyc` 反编译入口优先用独立的 renpy-script-decompile 技能，内置 `unrpyc.py` 仅作兜底（唯一说明处在 SKILL.md 注意事项"反编译"行）；rpyc/rpa 工具选型与版本坑统一在 `references/player_tools.md`，`advanced_tools.md` 不再重复；tl_check 分级细则唯一出处为 `references/tl_check.md`，SKILL.md 只留路由。
-5. 目录名与文件名一律 ASCII（内容、注释、文档用中文不限）。macOS 的 NFD 归一化会让中文路径上的 `import` 在跨系统 checkout 后失效。
-6. 改完 `scripts/` 必跑：`cd renpy/scripts/tests && python -m unittest discover`。**目录树、用例数、子命令数已由测试强制一致**，不用再靠人眼核对：`test_repo_consistency.py` 查文档内部自洽，`test_count.py` 查文档等于现实；新增/删除测试后这两处会一起失败并打印实际值。
-7. **过程文件不落仓库根**：调试脚本、解出的载荷、一次性验证代码、临时备份一律写入
-   `<游戏根>/.renpy-skill-tmp/`（点号前缀 = Windows 隐藏风格，与 `game/` 同级、紧邻
-   现场但不污染观感）或仓库 `tmp/`（已 gitignore）。仓库根只留分发物。
-   `payloadscan --out` 的落点即按此约定。这条不是洁癖：一次性脚本堆在根会被
-   `package.py` 打进分发包里，也会让读者分不清哪个是真工具。
-8. 分发一律走 `python package.py`：显式白名单，产物必须恰好一个 `SKILL.md`、不含 `.git/` / `__pycache__` / `renpy-dev` / `renpy-user`，时间戳固定因而可复现（同样的源码打出同样的 sha256）。提交前可跑 `python package.py --check` 只体检不写文件。
-
-## 进展
-
-- 未注册进技能加载器，需手动指定路径加载。
-- 解包 / 存档 / 汉化以调度成熟开源工具为主，不重写轮子；Ren'Py 自定义程度高，无法一键脚本化的部分由 AI 直接读写源码。
-- `.rpyc` 反编译的首选路径指向**仓库外**的 `renpy-script-decompile` 技能；该技能不存在时会静默回落到内置 `unrpyc.py`。后者下载并执行第三方代码，现固定在上游 2026-02-23 的 commit `3ae8334e`（7 个镜像按实测延迟排序，见 `scripts/unrpyc.py` 顶部注释与升级方法）；镜像本身仍不可信，彻底收口（自带源码或 zip 哈希校验）列为后续项。
+| `cache/` | 本机留档区，**不属于技能、不进 git、不进分发包**（已写进 `.gitignore`）：同类开源工具参考包（AiNiee、Universal-RenPy-Walkthrough、RenPy-WTForge 等）、单次调研数据。 |

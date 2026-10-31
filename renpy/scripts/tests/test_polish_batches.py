@@ -229,6 +229,34 @@ class TestPromptContent(unittest.TestCase):
             self.assertIn(f"{e['file']}:{e['line']}", md)
 
 
+class TestNativeFluencyPrompt(unittest.TestCase):
+    """母语流畅档（2026-10-27）：prompt 默认必须是母语者流畅标准，且带 context 提示。
+
+    背景：文档把默认档从「低扰动审校」升为「母语流畅」，但 render_prompt 模板一度
+    仍是旧文案——标准没落到 AI 实际读到的指令里。这里钉住模板本身。
+    """
+
+    def _md(self, items, context=None):
+        return P.render_prompt(1, items, ["s1"], False, [], [], None, context)
+
+    def test_native_speaker_standard_present(self):
+        md = self._md([_e("a.rpy", 1, "s1")])
+        self.assertIn("母语", md)
+        self.assertIn("流畅", md)
+
+    def test_more_active_rewrite_allowed(self):
+        md = self._md([_e("a.rpy", 1, "s1")])
+        self.assertIn("语序重组", md)
+
+    def test_context_hint_only_when_given(self):
+        md = self._md([_e("a.rpy", 1, "s1")])
+        self.assertNotIn("全局上下文", md)
+        md2 = self._md([_e("a.rpy", 1, "s1")],
+                       context="/p/.cache/polish/context.md")
+        self.assertIn("全局上下文", md2)
+        self.assertIn("context.md", md2)
+
+
 class TestPromptIsScriptNotTable(unittest.TestCase):
     """提示词必须是「连续剧本 + 允许不改」，而不是逐行矫正表（2026-10-18）。
 

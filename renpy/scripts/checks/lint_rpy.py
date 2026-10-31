@@ -15,6 +15,7 @@ Checks:
   [E009] Suspicious inline variable format
   [E010] Line too long (>200 chars)
   [E011] old/new length ratio too extreme (possible missing translation)
+  [E012] Odd number of unescaped double quotes (string never closed)
 
 ## 定位：tl 文件的「格式层」lint，与 tl_check 互补不重叠
 
@@ -69,6 +70,7 @@ ISSUE_TYPES = {
     "E009b": "bracketed plain word (likely translator style)",
     "E010": "line too long",
     "E011": "old/new length ratio extreme",
+    "E012": "odd double-quote count",
 }
 
 #: 分级：只有真问题进退出码，排版噪音与风格可疑只展示。
@@ -88,7 +90,7 @@ ISSUE_TYPES = {
 #:
 #: 仍进退出码的（真会导致块解析失败、译文丢失或显示错误）：E001 引号未闭合、
 #: E002 old 无匹配 new、E003 空译文、E004 读不出来、E005 块 ID 重复、
-#: E008 缩进混用、E009 可疑插值。
+#: E008 缩进混用、E009 可疑插值、E012 引号奇偶。
 SEVERITY = {
     "E001": "problem",
     "E002": "problem",
@@ -102,6 +104,7 @@ SEVERITY = {
     "E007": "cosmetic",
     "E010": "cosmetic",
     "E011": "cosmetic",
+    "E012": "problem",
 }
 
 #: 插值判定复用共享解析层 `rpy_syntax.iter_bracket_groups`，不用自己的正则。
@@ -129,6 +132,18 @@ VALID_VAR_RE = re.compile(r"^[a-zA-Z0-9_.\s]+(?:!t|!q|!i|!u|!s|!c|!l)?$")
 TAG_ARG_RE = re.compile(r"^[a-z][a-z_]*\s*=\s*[^\[\]]{1,20}$", re.I)
 
 PLAIN_WORD_RE = re.compile(r"^[^\s\[\]{}=!+\-*/%<>(),.:;'\"]{1,12}$")
+
+
+#: E012 引号奇偶：先剥掉反斜杠转义序列（`\"` 不计、`\\` 也不计），再数双引号。
+#: 奇数 = 该行的字符串没闭合——say 行形式（`# "原文"` 注释 + `"译文"` 行）的
+#: 引号损伤只有这里抓得到（E001 只查 old/new 行）。跨平台版，取代无人值守档
+#: 曾用的 PowerShell 引号奇偶一行命令。已知边界：tl 内嵌 python 块里单独成行
+#: 的 `"""` docstring 会误报，tl 文件里这种写法极罕见，不做特判。
+_ESCAPE_SEQ_RE = re.compile(r"\\.")
+
+
+def _count_unescaped_quotes(line):
+    return _ESCAPE_SEQ_RE.sub("", line).count('"')
 
 
 def _inline_var_level(inner, orig_has_interp):
@@ -228,6 +243,12 @@ def check_file(filepath, lang="schinese"):
         # E010: long line
         if len(line) > 200:
             issues.append(("E010", lineno, "Line too long (%d chars)" % len(line)))
+
+        # E012: 引号奇偶（old/new 行的引号闭合由 E001 精确判定，不重复报）
+        if not (stripped.startswith("old ") or stripped.startswith("new ")):
+            if _count_unescaped_quotes(line) % 2:
+                issues.append(("E012", lineno,
+                               "Odd number of unescaped double quotes"))
 
         # 更新「当前对的原文是否有插值」：注释行或 old 行都算原文侧
         if stripped.startswith("#"):
@@ -415,7 +436,7 @@ else:
         """
 
         name = "fmtlint"
-        summary = "tl 文件格式层 lint：引号/块ID/行尾/缩进/超长行/长度比（语义问题看 tlcheck）"
+        summary = "tl 文件格式层 lint：引号/引号奇偶/块ID/行尾/缩进/超长行/长度比（语义问题看 tlcheck）"
         takes = TL_DIR
         requires_tl = True
 
