@@ -20,3 +20,6 @@ tmp/
 
 # 会话附件缓存：宿主工具的会话图片/文件暂存。不进 git。
 .loomy-attachments/
+
+# unittest 落盘日志（过程文件区约定，见 README 贡献规范第 7 条）
+ut.log
