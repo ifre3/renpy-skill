@@ -3,6 +3,18 @@
 本文件是评审与修复流水（按时间倒序）。技能能做什么看 [README.md](README.md)，
 入口与命令看 [renpy/SKILL.md](renpy/SKILL.md)。
 
+### 2026-10-31（第十批）：safe_path 兼容——检查器同目录导入显式注入
+
+**背景**：本机内置 Python 以 safe_path（-P / PYTHONSAFEPATH）模式启动，
+不再把脚本所在目录自动加进 sys.path，`ui/misuse/func/auto/button/lint`
+六个子命令的同级导入（`from common import` 等）直接 ModuleNotFoundError，
+test_cli_surface 6 例失败。
+
+**修复**：`checks/` 下 5 个 `from common import` 检查器与 `lint_check.py`
+在首次同级导入前显式 `sys.path.insert(0, 本目录)`，与既有 `../shared`
+注入同一惯例。614 用例全绿。已知残留：`shared/namebox.py` 的同级导入
+依赖导入方注入 shared/ 路径，作为库被导入不受影响。
+
 ### 2026-10-31（第九批）：线性模式生成器——半自动范式 + 三处机制修复
 
 **背景**：用 `linear add` 给 AfterDark 0.26 生成补丁后实测，暴露 4 个机制级问题，

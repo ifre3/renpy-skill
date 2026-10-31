@@ -42,6 +42,11 @@ import sys
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 # 共享常量/函数统一定义在 common.py（SCREEN_CALL_KW 按游戏补充时只改那一处）
+# 本目录显式入 sys.path：safe_path 解释器（-P / PYTHONSAFEPATH）不自动加脚本目录。
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
 from common import (
     TRANS_FUNC_PAT,
     RENPY_FUNC_KW,

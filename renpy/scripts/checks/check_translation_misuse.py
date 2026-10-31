@@ -15,6 +15,11 @@ import os
 import re
 import sys
 
+# 本目录显式入 sys.path：safe_path 解释器（-P / PYTHONSAFEPATH）不自动加脚本目录。
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
 from common import (
     green, red, yellow, should_skip, scan_files, print_items,
     decode_quoted_literal,

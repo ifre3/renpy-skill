@@ -1,0 +1,781 @@
+...............................................................  skip not-a-path.rpy: 'str' object has no attribute 'read_text'
+......扫描 1 个 .rpy 文件
+目录: C:\Users\ADMINI~1\AppData\Local\Temp\parity_p1wkkimd\game
+跳过翻译目录: 是
+跳过引擎目录: 是 (renpy/、lib/ 等)
+============================================================
+
+============================================================
+汇总:
+  CRITICAL: 0
+  WARNING:  0
+  INFO:     0
+  总计:     0
+错误: 目录不存在: C:\Users\ADMINI~1\AppData\Local\Temp\parity_xm_qzsn3\nope
+.......[WARN] renpy_screen_calls.json 读取失败，忽略：Expecting property name enclosed in double quotes: line 1 column 3 (char 2)
+.......[WARN] renpy_skip_files.json 读取失败，改用默认清单：Expecting value: line 1 column 1 (char 0)
+.................................................................................................................................Directory not found: /nonexistent/path/xyz
+======================================================================
+  Ren'Py Translation Lint -- 1 files
+======================================================================
+
+
+  !!  a.rpy (1 problems)
+      [E010] L     3 line too long: Line too long (248 chars)
+
+======================================================================
+  Total: 1 issues
+
+  By type:
+    [E010] line too long: 1
+
+  注：其中 1 条为排版级（缩进两个空格，如行尾空白/超长行/长度比），不进退出码。英→中天然压缩使长度比中位数仅 0.33，E011 的 0.3 阈值在合规项目上也会命中约 30% 的句子——真漏翻看 `untranslated`，不看这里。
+======================================================================
+[提示] 项目根未找到 术语表.xlsx / 翻译结果.md；润色前应先定术语，否则 AI 只能凭上下文猜译名：
+    python names/make_glossary.py C:\Users\ADMINI~1\AppData\Local --lang schinese -o glossary.json
+产出 4 批 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmp9xjdt1by
+账本: C:\Users\ADMINI~1\AppData\Local\Temp\tmp9xjdt1by\polish_state.json（共 4 批记录）
+
+下一步：
+  1. 读 batch_NNN.prompt.md，AI 产出 fixes.json
+  2. python merge_polish.py --pool entries.json --fixes fixes.json -o polish_batch.json
+  3. python ../translate/autotranslate.py apply <tl目录> --input polish_batch.json --overwrite --dry-run
+  4. 核对 SKIP 数后去掉 --dry-run 实写（自动 .bak）
+  5. 把该批在 polish_state.json 里标 consumed=true，再跑下一批
+[提示] 项目根未找到 术语表.xlsx / 翻译结果.md；润色前应先定术语，否则 AI 只能凭上下文猜译名：
+    python names/make_glossary.py C:\Users\ADMINI~1\AppData\Local --lang schinese -o glossary.json
+产出 4 批 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmp_ih45628
+账本: C:\Users\ADMINI~1\AppData\Local\Temp\tmp_ih45628\polish_state.json（共 4 批记录）
+
+下一步：
+  1. 读 batch_NNN.prompt.md，AI 产出 fixes.json
+  2. python merge_polish.py --pool entries.json --fixes fixes.json -o polish_batch.json
+  3. python ../translate/autotranslate.py apply <tl目录> --input polish_batch.json --overwrite --dry-run
+  4. 核对 SKIP 数后去掉 --dry-run 实写（自动 .bak）
+  5. 把该批在 polish_state.json 里标 consumed=true，再跑下一批
+账本保留 1 个已完成批次，不会重复产出
+[提示] 项目根未找到 术语表.xlsx / 翻译结果.md；润色前应先定术语，否则 AI 只能凭上下文猜译名：
+    python names/make_glossary.py C:\Users\ADMINI~1\AppData\Local --lang schinese -o glossary.json
+产出 3 批 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmp_ih45628
+账本: C:\Users\ADMINI~1\AppData\Local\Temp\tmp_ih45628\polish_state.json（共 4 批记录）
+
+下一步：
+  1. 读 batch_NNN.prompt.md，AI 产出 fixes.json
+  2. python merge_polish.py --pool entries.json --fixes fixes.json -o polish_batch.json
+  3. python ../translate/autotranslate.py apply <tl目录> --input polish_batch.json --overwrite --dry-run
+  4. 核对 SKIP 数后去掉 --dry-run 实写（自动 .bak）
+  5. 把该批在 polish_state.json 里标 consumed=true，再跑下一批
+[提示] 项目根未找到 术语表.xlsx / 翻译结果.md；润色前应先定术语，否则 AI 只能凭上下文猜译名：
+    python names/make_glossary.py C:\Users\ADMINI~1\AppData\Local --lang schinese -o glossary.json
+产出 4 批 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmpviilju71
+账本: C:\Users\ADMINI~1\AppData\Local\Temp\tmpviilju71\polish_state.json（共 4 批记录）
+
+下一步：
+  1. 读 batch_NNN.prompt.md，AI 产出 fixes.json
+  2. python merge_polish.py --pool entries.json --fixes fixes.json -o polish_batch.json
+  3. python ../translate/autotranslate.py apply <tl目录> --input polish_batch.json --overwrite --dry-run
+  4. 核对 SKIP 数后去掉 --dry-run 实写（自动 .bak）
+  5. 把该批在 polish_state.json 里标 consumed=true，再跑下一批
+[提示] 项目根未找到 术语表.xlsx / 翻译结果.md；润色前应先定术语，否则 AI 只能凭上下文猜译名：
+    python names/make_glossary.py C:\Users\ADMINI~1\AppData\Local --lang schinese -o glossary.json
+产出 4 批 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmpviilju71
+账本: C:\Users\ADMINI~1\AppData\Local\Temp\tmpviilju71\polish_state.json（共 4 批记录）
+
+下一步：
+  1. 读 batch_NNN.prompt.md，AI 产出 fixes.json
+  2. python merge_polish.py --pool entries.json --fixes fixes.json -o polish_batch.json
+  3. python ../translate/autotranslate.py apply <tl目录> --input polish_batch.json --overwrite --dry-run
+  4. 核对 SKIP 数后去掉 --dry-run 实写（自动 .bak）
+  5. 把该批在 polish_state.json 里标 consumed=true，再跑下一批
+[提示] 项目根未找到 术语表.xlsx / 翻译结果.md；润色前应先定术语，否则 AI 只能凭上下文猜译名：
+    python names/make_glossary.py C:\Users\ADMINI~1\AppData\Local --lang schinese -o glossary.json
+产出 4 批 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmpviilju71
+账本: C:\Users\ADMINI~1\AppData\Local\Temp\tmpviilju71\polish_state.json（共 4 批记录）
+
+下一步：
+  1. 读 batch_NNN.prompt.md，AI 产出 fixes.json
+  2. python merge_polish.py --pool entries.json --fixes fixes.json -o polish_batch.json
+  3. python ../translate/autotranslate.py apply <tl目录> --input polish_batch.json --overwrite --dry-run
+  4. 核对 SKIP 数后去掉 --dry-run 实写（自动 .bak）
+  5. 把该批在 polish_state.json 里标 consumed=true，再跑下一批
+[提示] 项目根未找到 术语表.xlsx / 翻译结果.md；润色前应先定术语，否则 AI 只能凭上下文猜译名：
+    python names/make_glossary.py C:\Users\ADMINI~1\AppData\Local --lang schinese -o glossary.json
+产出 4 批 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmpviilju71
+账本: C:\Users\ADMINI~1\AppData\Local\Temp\tmpviilju71\polish_state.json（共 4 批记录）
+
+下一步：
+  1. 读 batch_NNN.prompt.md，AI 产出 fixes.json
+  2. python merge_polish.py --pool entries.json --fixes fixes.json -o polish_batch.json
+  3. python ../translate/autotranslate.py apply <tl目录> --input polish_batch.json --overwrite --dry-run
+  4. 核对 SKIP 数后去掉 --dry-run 实写（自动 .bak）
+  5. 把该批在 polish_state.json 里标 consumed=true，再跑下一批
+[警告] 1 条未通过结构守恒门，已剔除（需修好润色稿再合并）:
+   a.rpy:10: 标签/插值不一致（多 [嗯])
+   提示：润色只改措辞，{标签}/[插值]/% 格式符必须原样保留（基线是润色前译文）；确认要靠引擎裁决时，可回填后跑 checks/tl_check.py 复核。
+[警告] 本批 1 条 fixes 全部未产出改动（unchanged 0 / 剔除 1 / 无锚点 0）。这批润色实际没动任何一行：
+   - 若本就无需改动：正常，但要确认筛行阈值没把通顺句子送进来
+   - 若本该有改动：检查提示词是否让 AI 误以为要逐行复述原文
+   - 空转的批次仍消耗了整批 prompt 的 token，建议收紧筛行（--min-score）
+生成 0 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmpnab66sjy\batch.json
+生成 1 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmptyajlvx6\batch.json
+[警告] 1 条未通过结构守恒门，已剔除（需修好润色稿再合并）:
+   a.rpy:10: 标签/插值不一致（丢 %%)
+   提示：润色只改措辞，{标签}/[插值]/% 格式符必须原样保留（基线是润色前译文）；确认要靠引擎裁决时，可回填后跑 checks/tl_check.py 复核。
+[警告] 本批 1 条 fixes 全部未产出改动（unchanged 0 / 剔除 1 / 无锚点 0）。这批润色实际没动任何一行：
+   - 若本就无需改动：正常，但要确认筛行阈值没把通顺句子送进来
+   - 若本该有改动：检查提示词是否让 AI 误以为要逐行复述原文
+   - 空转的批次仍消耗了整批 prompt 的 token，建议收紧筛行（--min-score）
+生成 0 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmpmxzjolfi\batch.json
+[警告] 1 条未通过结构守恒门，已剔除（需修好润色稿再合并）:.........................................
+   a.rpy:10: 译文为空
+   提示：润色只改措辞，{标签}/[插值]/% 格式符必须原样保留（基线是润色前译文）；确认要靠引擎裁决时，可回填后跑 checks/tl_check.py 复核。
+[警告] 本批 1 条 fixes 全部未产出改动（unchanged 0 / 剔除 1 / 无锚点 0）。这批润色实际没动任何一行：
+   - 若本就无需改动：正常，但要确认筛行阈值没把通顺句子送进来
+   - 若本该有改动：检查提示词是否让 AI 误以为要逐行复述原文
+   - 空转的批次仍消耗了整批 prompt 的 token，建议收紧筛行（--min-score）
+生成 0 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmp988239fa\batch.json
+[警告] 1 条未通过结构守恒门，已剔除（需修好润色稿再合并）:
+   a.rpy:10: 标签/插值不一致（丢 {/i}、{i})
+   提示：润色只改措辞，{标签}/[插值]/% 格式符必须原样保留（基线是润色前译文）；确认要靠引擎裁决时，可回填后跑 checks/tl_check.py 复核。
+[警告] 本批 1 条 fixes 全部未产出改动（unchanged 0 / 剔除 1 / 无锚点 0）。这批润色实际没动任何一行：
+   - 若本就无需改动：正常，但要确认筛行阈值没把通顺句子送进来
+   - 若本该有改动：检查提示词是否让 AI 误以为要逐行复述原文
+   - 空转的批次仍消耗了整批 prompt 的 token，建议收紧筛行（--min-score）
+生成 0 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmptq64x5ge\batch.json
+生成 1 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmpyn_b6oag\batch.json
+[警告] 1 条无锚点，未纳入批次:
+   a.rpy:99
+[警告] 本批 1 条 fixes 全部未产出改动（unchanged 0 / 剔除 0 / 无锚点 1）。这批润色实际没动任何一行：
+   - 若本就无需改动：正常，但要确认筛行阈值没把通顺句子送进来
+   - 若本该有改动：检查提示词是否让 AI 误以为要逐行复述原文
+   - 空转的批次仍消耗了整批 prompt 的 token，建议收紧筛行（--min-score）
+生成 0 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmp27aa9d73\batch.json
+生成 1 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmplwv4rj3q\batch.json
+生成 1 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmpxf21j44b\batch.json
+[警告] 1 条未通过结构守恒门，已剔除（需修好润色稿再合并）:
+   a.rpy:10: 换行数增加（原文 0 → 润色 1）
+   提示：润色只改措辞，{标签}/[插值]/% 格式符必须原样保留（基线是润色前译文）；确认要靠引擎裁决时，可回填后跑 checks/tl_check.py 复核。
+[警告] 本批 1 条 fixes 全部未产出改动（unchanged 0 / 剔除 1 / 无锚点 0）。这批润色实际没动任何一行：
+   - 若本就无需改动：正常，但要确认筛行阈值没把通顺句子送进来
+   - 若本该有改动：检查提示词是否让 AI 误以为要逐行复述原文
+   - 空转的批次仍消耗了整批 prompt 的 token，建议收紧筛行（--min-score）
+生成 0 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmpg4kon0m5\batch.json
+生成 1 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmpgoz65vfw\batch.json
+[跳过] 1 条与原文译文相同（模型判为不用改），无需回填：
+   a.rpy:10
+[警告] 本批 1 条 fixes 全部未产出改动（unchanged 1 / 剔除 0 / 无锚点 0）。这批润色实际没动任何一行：
+   - 若本就无需改动：正常，但要确认筛行阈值没把通顺句子送进来
+   - 若本该有改动：检查提示词是否让 AI 误以为要逐行复述原文
+   - 空转的批次仍消耗了整批 prompt 的 token，建议收紧筛行（--min-score）
+生成 0 条 -> C:\Users\ADMINI~1\AppData\Local\Temp\tmpatf5xak5\batch.json
+................................................  [ERROR] 备份失败，已阻止写入: C:\Users\ADMINI~1\AppData\Local\Temp\tmpjag95bz1\script.rpy: disk full
+......................................................从 C:\Users\ADMINI~1\AppData\Local\Temp\tmpfwtkgr_b\translations.json 加载 1 条有效翻译，回填到 1 个文件（仅写空译文）
+
+  [SKIP] test.rpy:1 原文/角色已变化、目标非空或找不到安全位置
+
+==================================================
+完成: 0 写入 / 1 跳过
+从 C:\Users\ADMINI~1\AppData\Local\Temp\tmpfwtkgr_b\translations.json 加载 1 条有效翻译，回填到 1 个文件（允许覆盖非空译文）
+
+  test.rpy: 写入 1 条
+
+==================================================
+完成: 1 写入 / 0 跳过
+已自动备份为 .bak 文件
+从 C:\Users\ADMINI~1\AppData\Local\Temp\tmp_dltrrzf\translations.json 加载 1 条有效翻译，回填到 1 个文件（仅写空译文）
+
+  test.rpy: 写入 1 条
+
+==================================================
+完成: 1 写入 / 0 跳过
+已自动备份为 .bak 文件
+从 C:\Users\ADMINI~1\AppData\Local\Temp\tmpxwcw_u2a\translations.json 加载 1 条有效翻译，回填到 1 个文件（仅写空译文）
+
+  test.rpy: 写入 1 条
+
+==================================================
+完成: 1 写入 / 0 跳过
+已自动备份为 .bak 文件
+................................Scanned 1 files, 1 untranslated (mode: strict)
+Exported: C:\Users\ADMINI~1\AppData\Local\Temp\tmp2mosyflg\out.csv
+..
+======================================================================
+  Step 2: 分类 — 变体识别与归组
+======================================================================
+
+──────────────────────────────────────────────────────────────────────
+  Tomori → [灯里]  ✓0  变体1种/1处
+    「Tomori」 × 1
+
+======================================================================
+  分类完成
+  ✓  正确:          0
+  ✗  变体种类:      1
+  ✗  变体出现:      1
+  ?  未识别:        0
+======================================================================
+
+分类结果已保存: C:\Users\ADMINI~1\AppData\Local\Temp\tmp0sdxdthg\classification.json
+  下一步: 编辑 C:\Users\ADMINI~1\AppData\Local\Temp\tmp0sdxdthg\classification.json 确认变体替换方案，或用 --step unify 处理
+.
+======================================================================
+  Step 2: 分类 — 变体识别与归组
+======================================================================
+
+──────────────────────────────────────────────────────────────────────
+  Tomori → [灯里]  ✓1  变体1种/1处  未识别1处
+    「Tomori」 × 1
+    ? L14 test.rpy
+      EN: "Tomori smiled."
+      CN: 托莫里笑了。
+
+======================================================================
+  分类完成
+  ✓  正确:          2
+  ✗  变体种类:      1
+  ✗  变体出现:      1
+  ?  未识别:        1
+======================================================================
+
+分类结果已保存: C:\Users\ADMINI~1\AppData\Local\Temp\tmpldmrp7oe\classification.json
+  下一步: 编辑 C:\Users\ADMINI~1\AppData\Local\Temp\tmpldmrp7oe\classification.json 确认变体替换方案，或用 --step unify 处理
+..........................============================================================
+  ALL: ui + misuse + func + auto + charname + crash + fontcheck + langcheck + integrity + label + type + duplicate + button + typography + tlcoverage + tlcheck + fmtlint + payloadscan + untranslated
+============================================================
+tl 目录: C:\Users\ADMINI~1\AppData\Local\Temp\tmpy21kyd4m\game\tl\japanese
+
+
+--- ui ------------------------------------------------
+  检测 screen UI 文本 (textbutton/label/show text) 缺少 _()
+------------------------------------------------------
+
+--- misuse --------------------------------------------
+  检测 Character[var] 缺 !t、翻译函数误用和插值标志问题
+------------------------------------------------------
+
+--- func ----------------------------------------------
+  检测 renpy.input/notify/自定义屏幕调用缺少 _()
+------------------------------------------------------
+
+--- auto ----------------------------------------------
+  交叉引用 Character 名字框和 menu 选项翻译覆盖
+------------------------------------------------------
+
+--- charname ------------------------------------------
+  检查角色名字框翻译完整性（Character 定义名是否有字符串翻译）
+------------------------------------------------------
+
+--- crash ---------------------------------------------
+  检测运行时崩溃风险
+------------------------------------------------------
+
+--- fontcheck -----------------------------------------
+  字体接入测试：引用存在性（含 .rpa）+ CJK 语言是否接字体
+------------------------------------------------------
+
+--- langcheck -----------------------------------------
+  多语言链路测试：Language 入口 / 默认语言 / strings 覆盖
+------------------------------------------------------
+
+--- integrity -----------------------------------------
+  检查变量、角色、标签结构、参数和转义完整性
+------------------------------------------------------
+
+--- label ---------------------------------------------
+  检测 Ren'Py 标签问题（未定义/重复/不可达）
+------------------------------------------------------
+
+--- type ----------------------------------------------
+  检测 Python 类型安全问题
+------------------------------------------------------
+
+--- duplicate -----------------------------------------
+  检测翻译文件中重复的 old 字符串
+------------------------------------------------------
+
+--- button --------------------------------------------
+  检测按钮文本未被 translate strings 捕获
+------------------------------------------------------
+
+--- typography ----------------------------------------
+  字号与排版合理性检查（中文字号下限、outline 比例、硬编码 size）
+------------------------------------------------------
+
+--- tlcoverage ----------------------------------------
+  源脚本↔tl覆盖对照：找出没有对应译文的源脚本（untranslated 的盲区）
+------------------------------------------------------
+
+--- tlcheck -------------------------------------------
+  tl 翻译文件质检：崩溃级/显示级/提示级三级报告（--fix 才写盘；--glossary 术语一致性、--lang-ratio 语言分块判定为可选维度）
+------------------------------------------------------
+
+--- fmtlint -------------------------------------------
+  tl 文件格式层 lint：引号/引号奇偶/块ID/行尾/缩进/超长行/长度比（语义问题看 tlcheck）
+  （tl_dir: C:\Users\ADMINI~1\AppData\Local\Temp\tmpy21kyd4m\game\tl\japanese）
+------------------------------------------------------
+
+--- payloadscan ---------------------------------------
+  识别混淆载荷并区分引流/汉化证据（只读）
+------------------------------------------------------
+
+--- untranslated --------------------------------------
+  检查未翻译或空译文条目（支持 CSV）
+  （tl_dir: C:\Users\ADMINI~1\AppData\Local\Temp\tmpy21kyd4m\game\tl\japanese）
+------------------------------------------------------
+.============================================================
+  ALL: ui + misuse + func + auto + charname + crash + fontcheck + langcheck + integrity + label + type + duplicate + button + typography + tlcoverage + tlcheck + fmtlint + payloadscan + untranslated
+============================================================
+tl 目录: C:\Users\ADMINI~1\AppData\Local\Temp\tmpl4k9yt03\game\tl\schinese
+
+
+--- ui ------------------------------------------------
+  检测 screen UI 文本 (textbutton/label/show text) 缺少 _()
+------------------------------------------------------
+
+--- misuse --------------------------------------------
+  检测 Character[var] 缺 !t、翻译函数误用和插值标志问题
+------------------------------------------------------
+
+--- func ----------------------------------------------
+  检测 renpy.input/notify/自定义屏幕调用缺少 _()
+------------------------------------------------------
+
+--- auto ----------------------------------------------
+  交叉引用 Character 名字框和 menu 选项翻译覆盖
+------------------------------------------------------
+
+--- charname ------------------------------------------
+  检查角色名字框翻译完整性（Character 定义名是否有字符串翻译）
+------------------------------------------------------
+
+--- crash ---------------------------------------------
+  检测运行时崩溃风险
+------------------------------------------------------
+
+--- fontcheck -----------------------------------------
+  字体接入测试：引用存在性（含 .rpa）+ CJK 语言是否接字体
+------------------------------------------------------
+
+--- langcheck -----------------------------------------
+  多语言链路测试：Language 入口 / 默认语言 / strings 覆盖
+------------------------------------------------------
+
+--- integrity -----------------------------------------
+  检查变量、角色、标签结构、参数和转义完整性
+------------------------------------------------------
+
+--- label ---------------------------------------------
+  检测 Ren'Py 标签问题（未定义/重复/不可达）
+------------------------------------------------------
+
+--- type ----------------------------------------------
+  检测 Python 类型安全问题
+------------------------------------------------------
+
+--- duplicate -----------------------------------------
+  检测翻译文件中重复的 old 字符串
+------------------------------------------------------
+
+--- button --------------------------------------------
+  检测按钮文本未被 translate strings 捕获
+------------------------------------------------------
+
+--- typography ----------------------------------------
+  字号与排版合理性检查（中文字号下限、outline 比例、硬编码 size）
+------------------------------------------------------
+
+--- tlcoverage ----------------------------------------
+  源脚本↔tl覆盖对照：找出没有对应译文的源脚本（untranslated 的盲区）
+------------------------------------------------------
+
+--- tlcheck -------------------------------------------
+  tl 翻译文件质检：崩溃级/显示级/提示级三级报告（--fix 才写盘；--glossary 术语一致性、--lang-ratio 语言分块判定为可选维度）
+------------------------------------------------------
+
+--- fmtlint -------------------------------------------
+  tl 文件格式层 lint：引号/引号奇偶/块ID/行尾/缩进/超长行/长度比（语义问题看 tlcheck）
+  （tl_dir: C:\Users\ADMINI~1\AppData\Local\Temp\tmpl4k9yt03\game\tl\schinese）
+------------------------------------------------------
+
+--- payloadscan ---------------------------------------
+  识别混淆载荷并区分引流/汉化证据（只读）
+------------------------------------------------------
+
+--- untranslated --------------------------------------
+  检查未翻译或空译文条目（支持 CSV）
+  （tl_dir: C:\Users\ADMINI~1\AppData\Local\Temp\tmpl4k9yt03\game\tl\schinese）
+------------------------------------------------------
+.============================================================
+  ALL: ui + misuse + func + auto + charname + crash + fontcheck + langcheck + integrity + label + type + duplicate + button + typography + tlcoverage + tlcheck + fmtlint + payloadscan + untranslated
+============================================================
+[WARN] 未找到 MyGame/game/tl/schinese
+       以下翻译侧检查将跳过：
+         charname duplicate fmtlint integrity tlcheck tlcoverage untranslated
+       这是预期行为（项目还没建翻译目录），不是错误。
+       想做翻译体检先跑：python setup/setup_i18n.py --path <项目> --lang schinese
+
+
+--- ui ------------------------------------------------
+  检测 screen UI 文本 (textbutton/label/show text) 缺少 _()
+------------------------------------------------------
+
+--- misuse --------------------------------------------
+  检测 Character[var] 缺 !t、翻译函数误用和插值标志问题
+------------------------------------------------------
+
+  !! misuse exit code 1
+
+--- func ----------------------------------------------
+  检测 renpy.input/notify/自定义屏幕调用缺少 _()
+------------------------------------------------------
+
+--- auto ----------------------------------------------
+  交叉引用 Character 名字框和 menu 选项翻译覆盖
+------------------------------------------------------
+
+--- charname ------------------------------------------
+  检查角色名字框翻译完整性（Character 定义名是否有字符串翻译）
+  -- 跳过：无 schinese 翻译目录
+
+--- crash ---------------------------------------------
+  检测运行时崩溃风险
+------------------------------------------------------
+
+--- fontcheck -----------------------------------------
+  字体接入测试：引用存在性（含 .rpa）+ CJK 语言是否接字体
+------------------------------------------------------
+
+--- langcheck -----------------------------------------
+  多语言链路测试：Language 入口 / 默认语言 / strings 覆盖
+------------------------------------------------------
+
+--- integrity -----------------------------------------
+  检查变量、角色、标签结构、参数和转义完整性
+  -- 跳过：无 schinese 翻译目录
+
+--- label ---------------------------------------------
+  检测 Ren'Py 标签问题（未定义/重复/不可达）
+------------------------------------------------------
+
+--- type ----------------------------------------------
+  检测 Python 类型安全问题
+------------------------------------------------------
+
+--- duplicate -----------------------------------------
+  检测翻译文件中重复的 old 字符串
+  -- 跳过：无 schinese 翻译目录
+
+--- button --------------------------------------------
+  检测按钮文本未被 translate strings 捕获
+------------------------------------------------------
+
+--- typography ----------------------------------------
+  字号与排版合理性检查（中文字号下限、outline 比例、硬编码 size）
+------------------------------------------------------
+
+--- tlcoverage ----------------------------------------
+  源脚本↔tl覆盖对照：找出没有对应译文的源脚本（untranslated 的盲区）
+  -- 跳过：无 schinese 翻译目录
+
+--- tlcheck -------------------------------------------
+  tl 翻译文件质检：崩溃级/显示级/提示级三级报告（--fix 才写盘；--glossary 术语一致性、--lang-ratio 语言分块判定为可选维度）
+  -- 跳过：无 schinese 翻译目录
+
+--- fmtlint -------------------------------------------
+  tl 文件格式层 lint：引号/引号奇偶/块ID/行尾/缩进/超长行/长度比（语义问题看 tlcheck）
+  -- 跳过：无 schinese 翻译目录
+
+--- payloadscan ---------------------------------------
+  识别混淆载荷并区分引流/汉化证据（只读）
+------------------------------------------------------
+
+--- untranslated --------------------------------------
+  检查未翻译或空译文条目（支持 CSV）
+  -- 跳过：无 schinese 翻译目录
+
+有问题的检查项: misuse(1)
+（退出码 1 通常表示「查出了问题」，不是脚本崩溃；崩溃看 traceback）
+.============================================================
+  ALL: ui + misuse + func + auto + charname + crash + fontcheck + langcheck + integrity + label + type + duplicate + button + typography + tlcoverage + tlcheck + fmtlint + payloadscan + untranslated
+============================================================
+[WARN] 未找到 C:\Users\ADMINI~1\AppData\Local\Temp\tmp1tnb9a2j/game/tl/schinese
+       以下翻译侧检查将跳过：
+         charname duplicate fmtlint integrity tlcheck tlcoverage untranslated
+       这是预期行为（项目还没建翻译目录），不是错误。
+       想做翻译体检先跑：python setup/setup_i18n.py --path <项目> --lang schinese
+
+
+--- ui ------------------------------------------------
+  检测 screen UI 文本 (textbutton/label/show text) 缺少 _()
+------------------------------------------------------
+
+--- misuse --------------------------------------------
+  检测 Character[var] 缺 !t、翻译函数误用和插值标志问题
+------------------------------------------------------
+
+--- func ----------------------------------------------
+  检测 renpy.input/notify/自定义屏幕调用缺少 _()
+------------------------------------------------------
+
+--- auto ----------------------------------------------
+  交叉引用 Character 名字框和 menu 选项翻译覆盖
+------------------------------------------------------
+
+--- charname ------------------------------------------
+  检查角色名字框翻译完整性（Character 定义名是否有字符串翻译）
+  -- 跳过：无 schinese 翻译目录
+
+--- crash ---------------------------------------------
+  检测运行时崩溃风险
+------------------------------------------------------
+
+--- fontcheck -----------------------------------------
+  字体接入测试：引用存在性（含 .rpa）+ CJK 语言是否接字体
+------------------------------------------------------
+
+--- langcheck -----------------------------------------
+  多语言链路测试：Language 入口 / 默认语言 / strings 覆盖
+------------------------------------------------------
+
+--- integrity -----------------------------------------
+  检查变量、角色、标签结构、参数和转义完整性
+  -- 跳过：无 schinese 翻译目录
+
+--- label ---------------------------------------------
+  检测 Ren'Py 标签问题（未定义/重复/不可达）
+------------------------------------------------------
+
+--- type ----------------------------------------------
+  检测 Python 类型安全问题
+------------------------------------------------------
+
+--- duplicate -----------------------------------------
+  检测翻译文件中重复的 old 字符串
+  -- 跳过：无 schinese 翻译目录
+
+--- button --------------------------------------------
+  检测按钮文本未被 translate strings 捕获
+------------------------------------------------------
+
+--- typography ----------------------------------------
+  字号与排版合理性检查（中文字号下限、outline 比例、硬编码 size）
+------------------------------------------------------
+
+--- tlcoverage ----------------------------------------
+  源脚本↔tl覆盖对照：找出没有对应译文的源脚本（untranslated 的盲区）
+  -- 跳过：无 schinese 翻译目录
+
+--- tlcheck -------------------------------------------
+  tl 翻译文件质检：崩溃级/显示级/提示级三级报告（--fix 才写盘；--glossary 术语一致性、--lang-ratio 语言分块判定为可选维度）
+  -- 跳过：无 schinese 翻译目录
+
+--- fmtlint -------------------------------------------
+  tl 文件格式层 lint：引号/引号奇偶/块ID/行尾/缩进/超长行/长度比（语义问题看 tlcheck）
+  -- 跳过：无 schinese 翻译目录
+
+--- payloadscan ---------------------------------------
+  识别混淆载荷并区分引流/汉化证据（只读）
+------------------------------------------------------
+
+--- untranslated --------------------------------------
+  检查未翻译或空译文条目（支持 CSV）
+  -- 跳过：无 schinese 翻译目录
+.................................................................................[错误] 术语表不存在: C:\Users\ADMINI~1\AppData\Local\Temp\tmpei3e0s4o\nope.json
+...................................扫描 1 个文件: C:\Users\ADMINI~1\AppData\Local\Temp\tmpnfnb4q9a\game\tl\schinese
+术语表: C:\Users\ADMINI~1\AppData\Local\Temp\tmpnfnb4q9a\g.jsonl（1 条，核对译文是否落实定稿译名）
+
+== [术语] 术语未落实 (1 处) ==
+  a.rpy:4: 原文含 "Eileen"，译文未见定稿译名 "艾琳"
+
+共 1 处问题（无崩溃级）（术语级 1 处）
+
+注：本工具按「句」比对 old/new（含崩溃级分级）；同批句子在 `all` 里
+    还会被 untranslated（只看 new 是否为空/等于 old）与 integrity
+    （变量/标签结构/转义）各看一遍。三者视角不同、互不取代：
+      · 要修（--fix）→ 用本工具，只有它带自动修复
+      · 只要空译文清单 → untranslated 更快（还支持 --csv）
+      · 要变量/转义层面的结构比对 → integrity
+    另有两条可选维度默认关闭：--glossary 术语一致性、
+    --lang-ratio 语言分块判定（都不参与 `all`，需要时显式打开）。
+...............................................................................
+----------------------------------------------------------------------
+Ran 614 tests in 79.101s
+
+OK
+[ERROR] 引擎 6.99.12（Game.py）< URM 要求的 6.99.14，不安装。
+        URM 官方声明不支持该版本，装了也不加载。
+
+计划安装：
+  源    : C:\Users\ADMINI~1\AppData\Local\Temp\tmpxp1cx0gj\0x52_URM.rpa  (2.0 KB)
+  目标  : C:\Users\ADMINI~1\AppData\Local\Temp\tmpxp1cx0gj\game\0x52_URM.rpa
+  签名  : .urm_installed.json（供 --uninstall 精确回滚）
+  引擎  : 8.1.3
+
+不改游戏任何原有文件；卸载只需删除上述两项。
+
+[OK] 已安装 0x52_URM.rpa
+[OK] 已写入签名 .urm_installed.json
+
+验证：启动游戏 → 游戏内按空格，或点 quickmenu 的齿轮图标。
+首次会弹风险警告，点确认。
+[WARN] 签名文件损坏（Expecting property name enclosed in double quotes: line 1 column 3 (char 2)），按未安装处理：C:\Users\ADMINI~1\AppData\Local\Temp\tmpxp1cx0gj\game\.urm_installed.json
+
+计划安装：
+  源    : C:\Users\ADMINI~1\AppData\Local\Temp\tmphj7dh3j8\0x52_URM.rpa  (2.0 KB)
+  目标  : C:\Users\ADMINI~1\AppData\Local\Temp\tmphj7dh3j8\game\0x52_URM.rpa
+  签名  : .urm_installed.json（供 --uninstall 精确回滚）
+  引擎  : 8.1.3
+
+不改游戏任何原有文件；卸载只需删除上述两项。
+
+[OK] 已安装 0x52_URM.rpa
+[OK] 已写入签名 .urm_installed.json
+
+验证：启动游戏 → 游戏内按空格，或点 quickmenu 的齿轮图标。
+首次会弹风险警告，点确认。
+
+计划卸载：
+  删除  0x52_URM.rpa  (2.0 KB)
+  删除  .urm_installed.json  (0.3 KB)
+
+卸载后游戏完全恢复原状（URM 不写存档、不改 persistent）。
+
+试运行结束（未删除）。确认无误后加 --apply。
+
+计划安装：
+  源    : C:\Users\ADMINI~1\AppData\Local\Temp\tmp27ex2jga\0x52_URM.rpa  (2.0 KB)
+  目标  : C:\Users\ADMINI~1\AppData\Local\Temp\tmp27ex2jga\game\0x52_URM.rpa
+  签名  : .urm_installed.json（供 --uninstall 精确回滚）
+  引擎  : 8.1.3
+
+不改游戏任何原有文件；卸载只需删除上述两项。
+
+试运行结束（未写入）。确认无误后加 --apply。
+
+计划安装：
+  源    : C:\Users\ADMINI~1\AppData\Local\Temp\tmp9o52f043\0x52_URM.rpa  (2.0 KB)
+  目标  : C:\Users\ADMINI~1\AppData\Local\Temp\tmp9o52f043\game\0x52_URM.rpa
+  签名  : .urm_installed.json（供 --uninstall 精确回滚）
+  引擎  : 8.1.3
+
+不改游戏任何原有文件；卸载只需删除上述两项。
+
+[OK] 已安装 0x52_URM.rpa
+[OK] 已写入签名 .urm_installed.json
+
+验证：启动游戏 → 游戏内按空格，或点 quickmenu 的齿轮图标。
+首次会弹风险警告，点确认。
+
+计划安装：
+  源    : C:\Users\ADMINI~1\AppData\Local\Temp\tmp4t54cttk\0x52_URM.rpa  (2.0 KB)
+  目标  : C:\Users\ADMINI~1\AppData\Local\Temp\tmp4t54cttk\game\0x52_URM.rpa
+  签名  : .urm_installed.json（供 --uninstall 精确回滚）
+  引擎  : 8.1.3
+
+不改游戏任何原有文件；卸载只需删除上述两项。
+
+[OK] 已安装 0x52_URM.rpa
+[OK] 已写入签名 .urm_installed.json
+
+验证：启动游戏 → 游戏内按空格，或点 quickmenu 的齿轮图标。
+首次会弹风险警告，点确认。
+[ERROR] 本工具已安装过 URM（签名文件存在）。
+        升级请先 --uninstall --apply，再装新的。
+
+计划安装：
+  源    : C:\Users\ADMINI~1\AppData\Local\Temp\tmp3iv7of95\0x52_URM.rpa  (2.0 KB)
+  目标  : C:\Users\ADMINI~1\AppData\Local\Temp\tmp3iv7of95\game\0x52_URM.rpa
+  签名  : .urm_installed.json（供 --uninstall 精确回滚）
+  引擎  : 8.1.3
+
+不改游戏任何原有文件；卸载只需删除上述两项。
+
+[OK] 已安装 0x52_URM.rpa
+[OK] 已写入签名 .urm_installed.json
+
+验证：启动游戏 → 游戏内按空格，或点 quickmenu 的齿轮图标。
+首次会弹风险警告，点确认。
+
+计划安装：
+  源    : C:\Users\ADMINI~1\AppData\Local\Temp\tmpig292e4o\0x52_URM.rpa  (2.0 KB)
+  目标  : C:\Users\ADMINI~1\AppData\Local\Temp\tmpig292e4o\game\0x52_URM.rpa
+  签名  : .urm_installed.json（供 --uninstall 精确回滚）
+  引擎  : 8.1.3
+
+不改游戏任何原有文件；卸载只需删除上述两项。
+
+[OK] 已安装 0x52_URM.rpa
+[OK] 已写入签名 .urm_installed.json
+
+验证：启动游戏 → 游戏内按空格，或点 quickmenu 的齿轮图标。
+首次会弹风险警告，点确认。
+
+计划卸载：
+  删除  0x52_URM.rpa  (2.0 KB)
+  删除  .urm_installed.json  (0.3 KB)
+
+卸载后游戏完全恢复原状（URM 不写存档、不改 persistent）。
+[OK] 已删除 0x52_URM.rpa
+[OK] 已删除 .urm_installed.json
+[ERROR] 没有本工具的安装签名，无法安全卸载。
+        签名是精确回滚的依据；没有它只能靠文件名猜，可能误删游戏自有文件。
+
+        但 game/ 下确实有疑似 URM 文件，需你自行确认后删除：
+          - 0x52_URM.rpa
+        注意：.rpy 的同目录 .rpyc 也要一起删，否则补丁仍会生效。
+
+计划安装：
+  源    : C:\Users\ADMINI~1\AppData\Local\Temp\tmphkvfs1fu\0x52_URM.rpa  (2.0 KB)
+  目标  : C:\Users\ADMINI~1\AppData\Local\Temp\tmphkvfs1fu\game\0x52_URM.rpa
+  签名  : .urm_installed.json（供 --uninstall 精确回滚）
+  引擎  : 8.1.3
+
+不改游戏任何原有文件；卸载只需删除上述两项。
+
+[OK] 已安装 0x52_URM.rpa
+[OK] 已写入签名 .urm_installed.json
+
+验证：启动游戏 → 游戏内按空格，或点 quickmenu 的齿轮图标。
+首次会弹风险警告，点确认。
+[WARN] game/ 下另有 1 个未签名的 URM 脚本（非本工具安装，本次不会删）：
+       - 0x52_URM.rpy
+       删掉它们才算彻底卸载（注意同目录 .rpyc 也要一起删）。
+
+
+计划卸载：
+  删除  0x52_URM.rpa  (2.0 KB)
+  删除  .urm_installed.json  (0.3 KB)
+
+卸载后游戏完全恢复原状（URM 不写存档、不改 persistent）。
+[OK] 已删除 0x52_URM.rpa
+[OK] 已删除 .urm_installed.json
+[ERROR] 检测到 .rpa 加密特征（archive_key.rpy），拒绝投放。
+        加密游戏的 .rpa 无法被 URM 正常加载，先解包：见 player_tools.md。
+
+计划安装：
+  源    : C:\Users\ADMINI~1\AppData\Local\Temp\tmpddr61ud5\0x52_URM.rpa  (2.0 KB)
+  目标  : C:\Users\ADMINI~1\AppData\Local\Temp\tmpddr61ud5\game\0x52_URM.rpa
+  签名  : .urm_installed.json（供 --uninstall 精确回滚）
+  引擎  : 8.1.3
+
+不改游戏任何原有文件；卸载只需删除上述两项。
+
+[OK] 已安装 0x52_URM.rpa
+[OK] 已写入签名 .urm_installed.json
+
+验证：启动游戏 → 游戏内按空格，或点 quickmenu 的齿轮图标。
+首次会弹风险警告，点确认。
+[WARN] game/ 下另有 1 个未签名的 URM 脚本（非本工具安装，本次不会删）：
+       - 0x52_URM.rpy
+       删掉它们才算彻底卸载（注意同目录 .rpyc 也要一起删）。
+
+
+计划卸载：
+  删除  0x52_URM.rpa  (2.0 KB)
+  删除  .urm_installed.json  (0.3 KB)
+  删除  0x52_URM.rpyc  (.rpyc 残留)
+
+卸载后游戏完全恢复原状（URM 不写存档、不改 persistent）。
+[OK] 已删除 0x52_URM.rpa
+[OK] 已删除 .urm_installed.json
+[OK] 已删除 0x52_URM.rpyc

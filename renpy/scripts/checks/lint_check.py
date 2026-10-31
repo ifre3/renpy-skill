@@ -24,6 +24,7 @@ import tempfile
 
 _TOOLS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for _path in (
+    os.path.dirname(os.path.abspath(__file__)),  # 本目录（safe_path 解释器不自动加，同级 check_untranslated/rpy_syntax 靠它）
     os.path.join(_TOOLS_DIR, "shared"),
 ):
     if _path not in sys.path:
