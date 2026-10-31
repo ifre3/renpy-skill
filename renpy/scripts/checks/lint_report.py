@@ -27,6 +27,15 @@ import os
 import re
 import sys
 
+# lang_names（shared/）提供默认语言；独立拷贝运行时降级回字面量
+_SHARED = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "shared")
+if _SHARED not in sys.path:
+    sys.path.insert(0, _SHARED)
+try:
+    from lang_names import DEFAULT_LANG
+except ImportError:  # pragma: no cover - 独立拷贝运行时降级
+    DEFAULT_LANG = "schinese"
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -34,8 +43,8 @@ if hasattr(sys.stdout, "reconfigure"):
 def main():
     ap = argparse.ArgumentParser(description="Ren'Py 翻译 lint 报告分析")
     ap.add_argument("root", help="翻译文件目录路径")
-    ap.add_argument("-l", "--lang", default="schinese",
-                    help="translate <lang> 块前缀（默认 schinese；换语言必须传，否则检测不到条目）")
+    ap.add_argument("-l", "--lang", default=DEFAULT_LANG,
+                    help="translate <lang> 块前缀（换语言必须显式传，否则检测不到条目）")
     args = ap.parse_args()
     tr_prefix = f"translate {args.lang}"
 

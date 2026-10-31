@@ -31,6 +31,7 @@ for _path in (
         sys.path.insert(0, _path)
 
 # check_untranslated 已从 translate/ 归位到 checks/（2026-10-06），与本脚本同级
+from lang_names import DEFAULT_LANG  # noqa: E402
 from check_untranslated import has_real_text  # noqa: E402
 from rpy_syntax import iter_translation_pairs  # noqa: E402
 
@@ -274,7 +275,7 @@ def main():
     )
     ap.add_argument("project", help="游戏目录（含 game/ 子目录）")
     ap.add_argument("--sdk", default="", help="Ren'Py SDK 路径")
-    ap.add_argument("-l", "--language", default="schinese", help="翻译语言代码")
+    ap.add_argument("-l", "--language", default=DEFAULT_LANG, help="翻译语言代码")
     ap.add_argument("--skip-sdk-lint", action="store_true", help="跳过 SDK lint")
     ap.add_argument("--sdk-lint-opts", nargs="*", default=["--no-orphan-tl", "--reserved-parameters"],
                     help="SDK lint 额外选项")

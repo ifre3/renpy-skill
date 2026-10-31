@@ -56,6 +56,10 @@ try:
     from rpy_syntax import iter_bracket_groups
 except ImportError:  # pragma: no cover - 独立拷贝运行时降级回正则
     iter_bracket_groups = None
+try:
+    from lang_names import DEFAULT_LANG
+except ImportError:  # pragma: no cover - 独立拷贝运行时降级
+    DEFAULT_LANG = "schinese"
 
 ISSUE_TYPES = {
     "E001": "unclosed quote",
@@ -400,7 +404,7 @@ def main():
     import argparse
     ap = argparse.ArgumentParser(description="Ren'Py Translation (.rpy) Linter")
     ap.add_argument("root_dir", help="翻译文件目录路径")
-    ap.add_argument("-l", "--lang", default="schinese",
+    ap.add_argument("-l", "--lang", default=DEFAULT_LANG,
                     help="translate <lang> 块前缀（默认 schinese；换语言必须传，否则检测不到条目）")
     args = ap.parse_args()
 

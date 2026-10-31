@@ -59,7 +59,7 @@ metadata:
 
 | 场景 | 说明 |
 |------|------|
-| **工具回归测试** | 改完 `scripts/` 必跑：`cd scripts/tests && python -m unittest discover`（纯标准库，614 用例）。用例数/目录树/子命令数须与 [scripts/README.md](scripts/README.md) 一致，有测试在守 |
+| **工具回归测试** | 改完 `scripts/` 必跑：`cd scripts/tests && python -m unittest discover`（纯标准库，621 用例）。用例数/目录树/子命令数须与 [scripts/README.md](scripts/README.md) 一致，有测试在守 |
 | **跨会话长流程** | 汉化/润色/创作均按第 0 节账本契约续跑：读账本 → 零 token 复查 → 从 `next` 继续；用户门决定落 `decisions`，同一项目不重问 |
 | **写入类工具安全网** | 首次写入自动 `.bak`（fail-closed，备份失败即停止）+ 原子替换；多数默认试运行，`--apply` 才落盘 |
 | **无 `tl/` 的中文（第三方机翻）** | 显示中文但 `game/tl/` 不存在 → 走 `config.replace_text`；`langcheck` 会点名它并指向 [replace_text_hook.md](references/replace_text_hook.md)，`tl_check` 仍只认 tl 目录 |

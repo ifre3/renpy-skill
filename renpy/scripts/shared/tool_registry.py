@@ -122,7 +122,8 @@ SETUP_GROUP = ["i18n", "lang", "fonts", "perfpanel", "rmsuffix", "unrpyc", "tabl
 ALL_GROUP = (CHECK_GROUP + CRASH_GROUP + I18N_GROUP + STRUCT_GROUP
              + TL_GROUP + PAYLOAD_GROUP + ["untranslated"])
 
-DEFAULT_LANG = "schinese"
+# 默认语言唯一出处：shared/lang_names.py（零依赖叶子模块，含语言码↔展示名映射）。
+from lang_names import DEFAULT_LANG  # noqa: E402
 
 # 检查器子命令名（ALL_GROUP 之外还有 charname 等；lint 不是检查器但归 all 之外的只读组）
 CHECKER_NAMES = (

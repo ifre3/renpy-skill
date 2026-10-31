@@ -65,6 +65,10 @@ try:
     from base_checker import PROJECT, BaseChecker
 except ImportError:  # 独立拷贝运行时降级：无 CHECKER，门面也发现不了它
     PROJECT, BaseChecker = "project", object
+try:
+    from lang_names import DEFAULT_LANG
+except ImportError:  # 独立拷贝运行时降级
+    DEFAULT_LANG = "schinese"
 # 同目录模块（tag_repair 等）在被当作脚本直接启动时也要能 import
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -932,7 +936,7 @@ CHECKER = TlCheckChecker()
 def main():
     ap = argparse.ArgumentParser(description="Ren'Py 翻译文件静态质检 v3")
     ap.add_argument("path", help="项目根目录或 game 目录")
-    ap.add_argument("--lang", default="schinese")
+    ap.add_argument("--lang", default=DEFAULT_LANG)
     ap.add_argument("-l", "--language", dest="lang2", default=None,
                     help="兼容 all 透传（--lang 已覆盖；不参与逻辑）")
     ap.add_argument("--fix", action="store_true",

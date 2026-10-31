@@ -28,6 +28,7 @@ _SHARED_CONTRACT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 if _SHARED_CONTRACT_DIR not in sys.path:
     sys.path.insert(0, _SHARED_CONTRACT_DIR)
 
+from lang_names import DEFAULT_LANG  # noqa: E402
 from base_checker import PROJECT, BaseChecker  # noqa: E402
 
 
@@ -397,7 +398,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("project", help="游戏目录（含 game/ 子目录）或 tl/ 目录")
-    parser.add_argument("-l", "--language", default="schinese", help="翻译语言代码")
+    parser.add_argument("-l", "--language", default=DEFAULT_LANG, help="翻译语言代码")
     parser.add_argument("-o", "--output", help="输出报告文件路径")
     args = parser.parse_args()
 

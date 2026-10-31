@@ -30,6 +30,7 @@ _SHARED_CONTRACT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 if _SHARED_CONTRACT_DIR not in sys.path:
     sys.path.insert(0, _SHARED_CONTRACT_DIR)
 
+from lang_names import DEFAULT_LANG  # noqa: E402
 from base_checker import PROJECT, BaseChecker  # noqa: E402
 
 
@@ -117,7 +118,7 @@ def check_interpolation_no_t(lines, rel):
 def main():
     ap = argparse.ArgumentParser(description="检测翻译函数误用和标志缺失")
     ap.add_argument("project", help="游戏目录（含 game/）")
-    ap.add_argument("-l", "--language", default="schinese")
+    ap.add_argument("-l", "--language", default=DEFAULT_LANG)
     ap.add_argument("-o", "--output", help="输出报告文件")
     args = ap.parse_args()
 

@@ -27,6 +27,7 @@ _SHARED_CONTRACT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 if _SHARED_CONTRACT_DIR not in sys.path:
     sys.path.insert(0, _SHARED_CONTRACT_DIR)
 
+from lang_names import DEFAULT_LANG  # noqa: E402
 from base_checker import PROJECT, BaseChecker  # noqa: E402
 
 
@@ -87,7 +88,7 @@ def check_menu_choices(lines, rel):
 def main():
     ap = argparse.ArgumentParser(description="交叉引用 Ren'Py 自动翻译文本的覆盖状态")
     ap.add_argument("project", help="游戏目录（含 game/）")
-    ap.add_argument("-l", "--language", default="schinese")
+    ap.add_argument("-l", "--language", default=DEFAULT_LANG)
     ap.add_argument("-o", "--output", help="输出报告文件")
     args = ap.parse_args()
 

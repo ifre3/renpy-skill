@@ -176,6 +176,23 @@ init python:
 - 兜底顺序：oldnew strings（新建 rpy，首行 `translate schinese strings:`）→ 额外文本提取（`check_untranslated.py` / 工具箱）→ `config.replace_text`
 - 引擎源码依据（`text.py:2320` / `2881`、`extras.py:191`）、以及**第三方发行版用本钩子做机翻**（无 `tl/`、载荷伪装成音频）的识别与拆除 → [replace_text_hook.md](replace_text_hook.md)
 
+## 8. 目标语言不是中文时（i18n 速查）
+
+翻译链路按 Ren'Py 语言码工作（`game/tl/<码>`），中文只是默认值不是前提：
+
+- **AI 翻译**：`autotranslate.py translate <tl目录> --target-language japanese`
+  （语言码或语言名都行，`korean`、"Brazilian Portuguese" 均可；也可用环境变量
+  `RENPY_TRANSLATE_TARGET_LANGUAGE`）。源语言同理 `--source-language`。
+  语言码→英文展示名映射收在 `scripts/shared/lang_names.py`，prompt 里用的是语言名。
+- **检查器**：所有 `-l` 参数照常传目标语言码，默认值统一出自
+  `lang_names.DEFAULT_LANG`（现为 schinese）。
+- **术语表**：`names/` 组（make_glossary / apply_glossary_body）对任意语言对工作，
+  人名术语表结构与语言无关。
+- **字体**：拉丁/西里尔目标语言通常无需换字体；RTL（阿拉伯语/希伯来语）需要
+  引擎级支持，Ren'Py 原生不完善，不要向用户承诺。
+- **润色启发式的边界**：`polish/` 管线的可疑行规则（被动句、英文词≥4、夹生词）
+  是中文译文专用启发式，非中文目标不要跑 polish 中文规则，直接跳过该环节。
+
 ## 典型示例
 
 ```rpy

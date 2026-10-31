@@ -35,6 +35,7 @@ _SHARED_DIR = os.path.join(_SCRIPTS_DIR, "shared")
 if _SHARED_DIR not in sys.path:
     sys.path.insert(0, _SHARED_DIR)
 
+from lang_names import DEFAULT_LANG  # noqa: E402
 from base_checker import PROJECT, BaseChecker, CheckContext  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -679,7 +680,7 @@ def main():
                     help="包含游戏自带引擎目录 renpy/、lib/ 等（默认跳过，引擎源码误报多）")
     # 统一 CLI 会把 -l/--language 原样转发给 all 中的每个检查器；崩溃检测
     # 默认跳过 tl，因此该参数仅用于保持命令兼容，不参与源码扫描。
-    ap.add_argument("-l", "--language", default="schinese", help=argparse.SUPPRESS)
+    ap.add_argument("-l", "--language", default=DEFAULT_LANG, help=argparse.SUPPRESS)
     args = ap.parse_args()
     sys.exit(run_scan(args.project,
                       skip_tl=args.no_tl and not args.include_tl,

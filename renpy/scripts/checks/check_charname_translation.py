@@ -52,6 +52,7 @@ _SHARED_CONTRACT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 if _SHARED_CONTRACT_DIR not in sys.path:
     sys.path.insert(0, _SHARED_CONTRACT_DIR)
 
+from lang_names import DEFAULT_LANG  # noqa: E402
 from base_checker import PROJECT, BaseChecker  # noqa: E402
 
 try:
@@ -113,7 +114,7 @@ Examples:
 """,
     )
     ap.add_argument("project", help="项目根目录或 game 目录")
-    ap.add_argument("-l", "--language", default="schinese", help="目标语言目录名（默认 schinese）")
+    ap.add_argument("-l", "--language", default=DEFAULT_LANG, help="目标语言目录名")
     ap.add_argument(
         "--glossary",
         help="术语表路径（.xlsx/.json）。给了才能识别「可保留英文」的名字——"

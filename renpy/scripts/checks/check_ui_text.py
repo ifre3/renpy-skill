@@ -38,6 +38,7 @@ _SHARED_CONTRACT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 if _SHARED_CONTRACT_DIR not in sys.path:
     sys.path.insert(0, _SHARED_CONTRACT_DIR)
 
+from lang_names import DEFAULT_LANG  # noqa: E402
 from base_checker import PROJECT, BaseChecker  # noqa: E402
 
 
@@ -159,7 +160,7 @@ def main():
         description="检测 Ren'Py UI 显示文本翻译状况（区分纯字面/拼接）"
     )
     ap.add_argument("project", help="游戏目录（含 game/）")
-    ap.add_argument("-l", "--language", default="schinese")
+    ap.add_argument("-l", "--language", default=DEFAULT_LANG)
     ap.add_argument("-o", "--output", help="输出报告文件")
     args = ap.parse_args()
 

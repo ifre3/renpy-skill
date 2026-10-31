@@ -35,6 +35,7 @@ for _p in (os.path.join(_TOOLS_DIR, "shared"),):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from lang_names import DEFAULT_LANG  # noqa: E402
 from base_checker import (  # noqa: E402
     PROJECT, BaseChecker, CheckContext, find_game_dir, iter_rpy,
 )
@@ -160,7 +161,7 @@ def main():
     ap = argparse.ArgumentParser(
         description="源脚本 ↔ tl 目录覆盖对照（untranslated 的盲区）")
     ap.add_argument("project", help="游戏根目录（含 game/）或 game 目录")
-    ap.add_argument("-l", "--language", default="schinese",
+    ap.add_argument("-l", "--language", default=DEFAULT_LANG,
                     help="目标语言（默认 schinese，对应 game/tl/<lang>）")
     args = ap.parse_args()
 

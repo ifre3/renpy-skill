@@ -60,6 +60,7 @@ for p in (_HERE, _TOOLS, _BACKUP_DIR, _CHECKS_DIR):
 
 from check_untranslated import scan_file, collect_rpy_files, has_real_text  # noqa: E402
 from backup import atomic_write_text  # noqa: E402
+from lang_names import resolve_language  # noqa: E402
 from rpy_syntax import (  # noqa: E402
     encode_rpy_string_content,
     iter_bracket_spans,
@@ -81,8 +82,8 @@ DEFAULT_CONFIG = {
     "api_url": os.environ.get("RENPY_TRANSLATE_API_URL", ""),
     "api_key": os.environ.get("RENPY_TRANSLATE_API_KEY"),
     "model": "auto",
-    "source_language": "English",
-    "target_language": "Simplified Chinese",
+    "source_language": os.environ.get("RENPY_TRANSLATE_SOURCE_LANGUAGE", "English"),
+    "target_language": os.environ.get("RENPY_TRANSLATE_TARGET_LANGUAGE", "Simplified Chinese"),
     "batch_chars": 1000,  # 每批约 N 字符
     "batch_interval_sec": 1.5,  # 批与批之间的间隔
     "request_timeout": 120,
@@ -105,6 +106,10 @@ def load_config(args=None):
             cfg["batch_chars"] = args.max_chars
         if getattr(args, "glossary", None):
             cfg["glossary_path"] = args.glossary
+        if getattr(args, "source_language", None):
+            cfg["source_language"] = resolve_language(args.source_language)
+        if getattr(args, "target_language", None):
+            cfg["target_language"] = resolve_language(args.target_language)
     return cfg
 
 
@@ -781,6 +786,7 @@ def cmd_translate(args):
     print(f"Model: {cfg['model']}")
     print(f"批次大小: ~{cfg['batch_chars']} 字符/批")
     print(f"限速间隔: {cfg['batch_interval_sec']}s/批")
+    print(f"语言: {cfg['source_language']} → {cfg['target_language']}")
     if glossary:
         print(f"术语表: {cfg.get('glossary_path', '')} ({len(glossary)} 条)")
     else:
@@ -1316,6 +1322,14 @@ API key:
         "--max-chars",
         type=positive_int,
         help="每批最大字符数 (覆盖默认)",
+    )
+    p_trans.add_argument(
+        "--source-language",
+        help="源语言：语言码（japanese）或语言名（Brazilian Portuguese）(覆盖默认，可用环境变量 RENPY_TRANSLATE_SOURCE_LANGUAGE)",
+    )
+    p_trans.add_argument(
+        "--target-language",
+        help="目标语言：语言码（tchinese/japanese/korean 等）或任意语言名 (覆盖默认，语言码自动转展示名，可用环境变量 RENPY_TRANSLATE_TARGET_LANGUAGE)",
     )
     p_trans.add_argument(
         "--glossary", "-g",

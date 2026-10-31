@@ -3,6 +3,31 @@
 本文件是评审与修复流水（按时间倒序）。技能能做什么看 [README.md](README.md)，
 入口与命令看 [renpy/SKILL.md](renpy/SKILL.md)。
 
+### 2026-10-31（第十一批）：i18n 参数化——翻译目标不再写死中文
+
+**背景**：`autotranslate.py` 的 `target_language` 写死 "Simplified Chinese" 且
+无覆盖入口，`checks/` 各检查器 `-l` 默认值各自硬编码 "schinese"，翻到非中文
+只能改源码。核实：tl 目录体系与全部检查器本就按语言码工作，缺口只在默认值层。
+
+**新增**：
+
+- `shared/lang_names.py`（零依赖叶子模块）：`DEFAULT_LANG` 唯一出处 +
+  Ren'Py 语言码→英文展示名映射（schinese/tchinese/japanese/korean/
+  brazilian_portuguese 等 32 码）+ `resolve_language()`（码自动转名，自由
+  文本透传）。`tool_registry.DEFAULT_LANG` 改为从此 re-export，门面 API 不变。
+- `autotranslate.py translate` 新增 `--source-language` / `--target-language`
+  （语言码或语言名均可）+ 环境变量 `RENPY_TRANSLATE_SOURCE_LANGUAGE` /
+  `RENPY_TRANSLATE_TARGET_LANGUAGE`；translate 运行时打印实际语言方向。
+- `checks/` 14 处 `-l` 默认值统一 `default=DEFAULT_LANG`（行为不变，值仍
+  schinese，只为单点收口）；lint_report/lint_rpy/tl_check 按各自既有降级
+  惯例兜底。
+- 文档：translation_workflow.md 增「目标语言不是中文时」速查节（含润色
+  中文启发式对非中文目标不适用的边界声明）；scripts/README 用法块补
+  非中文示例。
+
+**测试**：新增 test_lang_names.py（7 用例：映射/透传/覆盖链），全量
+621 用例全绿；README/SKILL/scripts README 计数同步。
+
 ### 2026-10-31（第十批）：safe_path 兼容——检查器同目录导入显式注入
 
 **背景**：本机内置 Python 以 safe_path（-P / PYTHONSAFEPATH）模式启动，

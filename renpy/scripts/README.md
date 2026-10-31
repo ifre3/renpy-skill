@@ -68,7 +68,7 @@ scripts/
 │   └── check_crash_risks_guide.md      ── 崩溃检测使用说明
 ├── translate/                            🌐 翻译写入类工具（只读检查器已全部归位到 checks/）
 │   ├── README.md                       ── 本组用法与安全规则
-│   ├── autotranslate.py                ── AI 翻译流水线 (扫描→翻译→应用)
+│   ├── autotranslate.py                ── AI 翻译流水线 (扫描→翻译→应用，目标语言可配)
 │   ├── sync_namebox_translation.py     ── 角色名字框同步 (Character → translate strings)
 │   ├── patch_renpy_say.py              🔧 修补 Python renpy.say() 硬编码英文
 │   ├── renpy_say_replacements.csv      ── patch_renpy_say.py 外部替换表
@@ -110,6 +110,7 @@ scripts/
 ├── shared/                                💾 共享模块
 │   ├── backup.py                       ── 首次 .bak + 原子写入
 │   ├── base_checker.py                 ── 检查器契约层（name/summary/takes/requires_tl/read_only + CheckContext）
+│   ├── lang_names.py                   ── 语言码→英文展示名映射 + DEFAULT_LANG 唯一出处（零依赖叶子模块）
 │   ├── tool_registry.py                ── 门面注册表：子命令→路径 + 分组（检查器元数据读各脚本 CHECKER）
 │   ├── rpa_index.py                    ── .rpa 归档文件名清单提取（只读索引，不碰数据）
 │   ├── namebox.py                      ── 名字栏识别 + 引擎等价翻译查找（全串精确，见 references/namebox_translation.md）
@@ -120,6 +121,7 @@ scripts/
     ├── test_crash_risks.py            ── 崩溃检测器误报边界回归（23 用例）
     ├── test_config_loaders.py         ── 外置 JSON 配置加载器（13 用例）
     ├── test_cli_surface.py            ── CLI 门面 36 子命令 --help 契约（7 用例）
+    ├── test_lang_names.py             ── 语言码映射收口 + autotranslate 语言参数覆盖（7 用例）
     ├── test_fonts_i18n.py             ── check_fonts/check_i18n/rpa_index 契约（31 用例）
     ├── test_urm_install.py            ── URM 安装门界/回滚/不越权（29 用例）
     ├── test_checks_zoo.py             ── checks/ 零覆盖检查器契约 + 重复函数形态 + 转义回归（37 用例）
@@ -158,6 +160,7 @@ $env:RENPY_TRANSLATE_API_KEY = "你的密钥"          # 只放环境变量，�
 
 python autotranslate.py scan game/tl/schinese     # 1. 扫描空译文（不调 API）
 python autotranslate.py translate game/tl/schinese --max-chars 1000   # 2. 翻译到缓存，可中断重跑
+python autotranslate.py translate game/tl/japanese --target-language japanese   # 翻到非中文：语言码或语言名均可
 python autotranslate.py apply game/tl/schinese --dry-run              # 3. 先预览
 python autotranslate.py apply game/tl/schinese                        # 4. 回填
 ```
@@ -228,7 +231,7 @@ python fix_lang_button.py <game> --apply                  # 修语言按钮写�
 
 ```bash
 cd tests
-python -m unittest discover -v          # 全部（当前 614 用例，约 60s）
+python -m unittest discover -v          # 全部（当前 621 用例，约 60s）
 python -m unittest test_renpy_tools -v  # 解析/回填安全/CLI 批次（179 用例）
 python -m unittest test_crash_risks -v  # 崩溃检测器误报边界（23）
 python -m unittest test_say_parse_contract -v  # say 解析契约（9）
